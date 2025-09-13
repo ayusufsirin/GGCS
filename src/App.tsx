@@ -1,8 +1,11 @@
 import React from 'react';
 import logo from './logo.svg';
 import './App.css';
+import {topicSet} from "./roslib";
 
 function App() {
+  topicSet.forEach((topic => console.log(topic)));
+
   return (
     <div className="App">
       <header className="App-header">
