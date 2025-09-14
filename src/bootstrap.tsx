@@ -4,20 +4,12 @@ import { collectInstanceBindings } from "./middleware/config-scan";
 import { attachBindings } from "./middleware/binder";
 import { WidgetAttrProvider } from "./middleware/widget-attr";
 import { config } from "./config";
-import { HUDWidget } from "./widgets/HUDWidget";
-import { MapWidget } from "./widgets/MapWidget";
-import { UndefinedWidget } from "./widgets/UndefinedWidget";
-
-// ---- Widget registry (extend as you add widgets) ----
-const WIDGETS: Record<string, React.ComponentType<any>> = {
-  hud: HUDWidget,
-  map: MapWidget,
-  // settings: SettingsWidget, // <-- add if you have it
-};
+import { WIDGETS } from "./widgets/widgets";
+import { FallbackWidget } from "./widgets/FallbackWidget";
 
 // ---- Render a single widget instance with isolation ----
 function WidgetFrame({ instanceId, name }: { instanceId: string; name: string }) {
-  const Comp = WIDGETS[name] ?? UndefinedWidget;
+  const Comp = WIDGETS[name] ?? FallbackWidget;
   return (
     <WidgetAttrProvider instanceId={instanceId}>
       <Comp/>
