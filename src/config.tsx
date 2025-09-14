@@ -20,8 +20,8 @@ export const config: Entity = {
               label: "Map",
               width: 8,
               height: 8,
-              x: 0,
-              y: 4,
+              x: 4,
+              y: 0,
               widget: {
                 name: "map",
                 config: {
@@ -90,7 +90,7 @@ export const config: Entity = {
               width: 4,
               height: 4,
               x: 0,
-              y: 0,
+              y: 4,
               widget: {
                 name: "gauge",
                 config: {
