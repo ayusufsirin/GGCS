@@ -17,7 +17,7 @@ export interface Value {
 }
 
 export interface Widget {
-  name: "gauge" | "hud" | "map" | "settings";
+  name: string;
   config: {
     [id: string]: Value;
   }
