@@ -86,11 +86,11 @@ const mapWidget: Widget = {
       topic: gpsTopic,
       topicField: ".longitude"
     },
-    gpsStatus: {
-      label: "GPS Status",
+    heading: {
+      label: "Heading",
       type: "topic",
-      topic: gpsTopic,
-      topicField: ".status.status"
+      topic: headingTopic,
+      topicField: ".data"
     }
   }
 };

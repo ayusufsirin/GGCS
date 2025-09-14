@@ -38,5 +38,11 @@ docker exec -it ggcs-rosbrodge /bin/bash -c \
 ```bash
 docker exec -it ggcs-rosbrodge /bin/bash -c \
   'source /opt/ros/humble/setup.bash && \
+   ros2 topic pub /heading std_msgs/msg/Float64 "{data: 30.0}"'
+```
+
+```bash
+docker exec -it ggcs-rosbrodge /bin/bash -c \
+  'source /opt/ros/humble/setup.bash && \
    ros2 topic pub /gps sensor_msgs/msg/NavSatFix "{latitude: 36.000, longitude: 42.000}"'
 ```
