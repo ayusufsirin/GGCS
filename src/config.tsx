@@ -1,59 +1,106 @@
-import { Entity } from "./interfaces";
+import { Entity, Topic, Widget } from "./interfaces";
+
+const speedTopic: Topic = {
+  name: "/speed",
+  type: "std_msgs/msg/Float64"
+};
+
+const accelTopic: Topic = {
+  name: "/accel",
+  type: "std_msgs/msg/Float64"
+};
+
+const gpsTopic: Topic = {
+  name: "/gps",
+  type: "sensor_msgs/msg/NavSatFix"
+};
+
+const hudWidget: Widget = {
+  name: "hud",
+  config: {
+    speed: {
+      label: "Speed (m/s)",
+      type: "topic",
+      topic: speedTopic,
+      topicField: ".data"
+    },
+    acceleration: {
+      label: "Acceleration (m/s^2)",
+      type: "topic",
+      topic: accelTopic,
+      topicField: ".data"
+    }
+  }
+};
+
+const mapWidget: Widget = {
+  name: "map",
+  config: {
+    latitude: {
+      label: "Latitude",
+      type: "topic",
+      topic: gpsTopic,
+      topicField: ".latitude"
+    },
+    longitude: {
+      label: "Longitude",
+      type: "topic",
+      topic: gpsTopic,
+      topicField: ".longitude"
+    },
+    gpsStatus: {
+      label: "GPS Status",
+      type: "topic",
+      topic: gpsTopic,
+      topicField: ".status.status"
+    }
+  }
+};
+
+const gaugeWidget: Widget = {
+  name: "gauge",
+  config: {
+    speed: {
+      label: "Speed (m/s)",
+      type: "topic",
+      topic: speedTopic,
+      topicField: ".data"
+    },
+    acceleration: {
+      label: "Acceleration (m/s^2)",
+      type: "topic",
+      topic: accelTopic,
+      topicField: ".data"
+    },
+    gpsStatus: {
+      label: "GPS Status",
+      type: "topic",
+      topic: gpsTopic,
+      topicField: ".status.status"
+    }
+  }
+};
 
 export const config: Entity = {
   tabs: {
     items: {
       settings: {
         label: "Settings",
-        widget: {
-          name: "settings",
-          config: {}
-        }
+        widget: { name: "settings", config: {} }
       },
       home: {
         label: "Home",
         grids: {
           horizontal: 12,
-          vertical: 8,
+          vertical: 12,
           items: {
             map: {
               label: "Map",
               width: 8,
-              height: 8,
+              height: 12,
               x: 4,
               y: 0,
-              widget: {
-                name: "map",
-                config: {
-                  latitude: {
-                    label: "Latitude",
-                    type: "topic",
-                    topic: {
-                      name: "/gps",
-                      type: "sensor_msgs/msg/NavSatFix"
-                    },
-                    topicField: ".latitude"
-                  },
-                  longitude: {
-                    label: "Longitude",
-                    type: "topic",
-                    topic: {
-                      name: "/gps",
-                      type: "sensor_msgs/msg/NavSatFix"
-                    },
-                    topicField: ".longitude"
-                  },
-                  gpsStatus: {
-                    label: "GPS Status",
-                    type: "topic",
-                    topic: {
-                      name: "/gps",
-                      type: "sensor_msgs/msg/NavSatFix"
-                    },
-                    topicField: ".status.status"
-                  }
-                }
-              }
+              widget: mapWidget
             },
             hud: {
               label: "HUD",
@@ -61,69 +108,35 @@ export const config: Entity = {
               height: 4,
               x: 0,
               y: 0,
-              widget: {
-                name: "hud",
-                config: {
-                  speed: {
-                    label: "Speed (m/s)",
-                    type: "topic",
-                    topic: {
-                      name: "/speed",
-                      type: "std_msgs/msg/Float64"
-                    },
-                    topicField: ".data"
-                  },
-                  acceleration: {
-                    label: "Acceleration (m/s^2)",
-                    type: "topic",
-                    topic: {
-                      name: "/accel",
-                      type: "std_msgs/msg/Float64"
-                    },
-                    topicField: ".data"
-                  }
-                }
-              }
+              widget: hudWidget
             },
-            hud1: {
+            gauge: {
               label: "HUD",
               width: 4,
               height: 4,
               x: 0,
               y: 4,
-              widget: {
-                name: "gauge",
-                config: {
-                  speed: {
-                    label: "Speed (m/s)",
-                    type: "topic",
-                    topic: {
-                      name: "/speed",
-                      type: "std_msgs/msg/Float64"
-                    },
-                    topicField: ".data"
+              widget: gaugeWidget
+            },
+            panel: {
+              label: "HUD",
+              width: 4,
+              height: 4,
+              x: 0,
+              y: 8,
+              tabs: {
+                items: {
+                  actions: {
+                    label: "Actions",
+                    widget: mapWidget
                   },
-                  acceleration: {
-                    label: "Acceleration (m/s^2)",
-                    type: "topic",
-                    topic: {
-                      name: "/accel",
-                      type: "std_msgs/msg/Float64"
-                    },
-                    topicField: ".data"
+                  healthCheck: {
+                    label: "Health Check",
+                    widget: gaugeWidget
                   },
-                  gpsStatus: {
-                    label: "GPS Status",
-                    type: "topic",
-                    topic: {
-                      name: "/gps",
-                      type: "sensor_msgs/msg/NavSatFix"
-                    },
-                    topicField: ".status.status"
-                  }
                 }
               }
-            },
+            }
           }
         }
       },
