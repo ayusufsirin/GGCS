@@ -18,10 +18,10 @@ export const config: Entity = {
           items: {
             map: {
               label: "Map",
-              width: 13,
-              height: 20,
+              width: 8,
+              height: 8,
               x: 0,
-              y: 0,
+              y: 4,
               widget: {
                 name: "map",
                 config: {
@@ -30,7 +30,7 @@ export const config: Entity = {
                     type: "topic",
                     topic: {
                       name: "/gps",
-                      type: "custom_msgs/msg/GPS"
+                      type: "sensor_msgs/msg/NavSatFix"
                     },
                     topicField: ".latitude"
                   },
@@ -39,10 +39,19 @@ export const config: Entity = {
                     type: "topic",
                     topic: {
                       name: "/gps",
-                      type: "custom_msgs/msg/GPS"
+                      type: "sensor_msgs/msg/NavSatFix"
                     },
                     topicField: ".longitude"
                   },
+                  gpsStatus: {
+                    label: "GPS Status",
+                    type: "topic",
+                    topic: {
+                      name: "/gps",
+                      type: "sensor_msgs/msg/NavSatFix"
+                    },
+                    topicField: ".status.status"
+                  }
                 }
               }
             },
@@ -76,9 +85,48 @@ export const config: Entity = {
                 }
               }
             },
+            hud1: {
+              label: "HUD",
+              width: 4,
+              height: 4,
+              x: 0,
+              y: 0,
+              widget: {
+                name: "gauge",
+                config: {
+                  speed: {
+                    label: "Speed (m/s)",
+                    type: "topic",
+                    topic: {
+                      name: "/speed",
+                      type: "std_msgs/msg/Float64"
+                    },
+                    topicField: ".data"
+                  },
+                  acceleration: {
+                    label: "Acceleration (m/s^2)",
+                    type: "topic",
+                    topic: {
+                      name: "/accel",
+                      type: "std_msgs/msg/Float64"
+                    },
+                    topicField: ".data"
+                  },
+                  gpsStatus: {
+                    label: "GPS Status",
+                    type: "topic",
+                    topic: {
+                      name: "/gps",
+                      type: "sensor_msgs/msg/NavSatFix"
+                    },
+                    topicField: ".status.status"
+                  }
+                }
+              }
+            },
           }
         }
-      }
+      },
     }
   }
 };

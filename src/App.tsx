@@ -1,15 +1,14 @@
 import React from 'react';
 import logo from './logo.svg';
 import './App.css';
-import {topicSet} from "./roslib";
+import { Dashboard } from "./bootstrap";
 
 function App() {
-  topicSet.forEach((topic => console.log(topic)));
-
   return (
     <div className="App">
+      <Dashboard/>
       <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
+        <img src={logo} className="App-logo" alt="logo"/>
         <p>
           Edit <code>src/App.tsx</code> and save to reload.
         </p>
