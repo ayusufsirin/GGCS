@@ -1,11 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import "leaflet/dist/leaflet.css"; // Ensure Leaflet CSS is loaded
-import { Circle, LayersControl, MapContainer, Marker, Polyline, TileLayer, useMap } from "react-leaflet";
-import L, { DivIcon, LatLngExpression, Marker as LeafletMarker } from "leaflet";
-import "leaflet-rotatedmarker"; // extends Leaflet's Marker with rotation
+import React from "react";
 import { useAttr } from "../middleware/hooks/use-attr";
-import homeIconUrl from "./images/map/home_icon.png";
-import vehicleIconUrl from "./images/map/vehicle_icon.png";
 
 // ---- Helpers ----
 const DEFAULT_CENTER: LatLngExpression = [39.87, 32.775];
@@ -22,16 +16,6 @@ function calculateEndpoint(lat: number, lng: number, headingDeg: number, lengthM
   return [endLat, endLng];
 }
 
-// Build a DivIcon for waypoint labels (index shown)
-function waypointIcon(index: number): DivIcon {
-  return L.divIcon({
-    className: "waypoint-icon",
-    html: `<div class="waypoint-label">${index}</div>`,
-    iconSize: [25, 25],
-    iconAnchor: [12, 12],
-  });
-}
-
 export function MapWidget() {
   // ---- Widget attributes ----
   const lat = useAttr<number>("latitude");      // degrees
@@ -39,38 +23,77 @@ export function MapWidget() {
   const heading = useAttr<number>("heading");   // degrees
 
   // Optional attrs with sensible defaults
-  // TODO: Implement constant type (near topic type) to the Widget interface
   const waypointsUrl = useAttr<string>("waypointsUrl") ?? "/waypoints";
-  // const vehicleIconUrl = useAttr<string>("vehicleIconUrl") ?? "./images/map/vehicle_icon.png";
-  // const homeIconUrl = useAttr<string>("homeIconUrl") ?? "./images/map/home_icon.png";
+  const vehicleIconUrl = useAttr<string>("vehicleIconUrl") ?? "/static/images/vehicle_icon.png";
+  const homeIconUrl = useAttr<string>("homeIconUrl") ?? "/static/images/home_icon.png";
   const initialZoom = useAttr<number>("initialZoom") ?? DEFAULT_ZOOM;
   const maxZoom = useAttr<number>("maxZoom") ?? DEFAULT_MAX_ZOOM;
   const maxPathLength = useAttr<number>("maxPathLength") ?? DEFAULT_PATH_LEN;
 
-  const centerLat = useAttr<number>("centerLat") ?? (DEFAULT_CENTER as number[])[0];
-  const centerLon = useAttr<number>("centerLon") ?? (DEFAULT_CENTER as number[])[1];
+  // You can also allow overriding initial center via attrs
+  const centerLat = useAttr<number>("centerLat") ?? (Array.isArray(DEFAULT_CENTER) ? (DEFAULT_CENTER as number[])[0] : 39.87);
+  const centerLon = useAttr<number>("centerLon") ?? (Array.isArray(DEFAULT_CENTER) ? (DEFAULT_CENTER as number[])[1] : 32.775);
 
-  // ---- State & Refs ----
-  const [waypoints, setWaypoints] = useState<{ lat: number; lng: number; proximityRadius?: number }[]>([]);
-  const [path, setPath] = useState<[number, number][]>([]);
-  const [home, setHome] = useState<[number, number] | null>(null);
+  // ---- Refs ----
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<LeafletMap | null>(null);
 
+  // Layers/graphics refs
   const vehicleMarkerRef = useRef<LeafletMarker | null>(null);
+  const headingLineRef = useRef<L.Polyline | null>(null);
+  const pathPolylineRef = useRef<L.Polyline | null>(null);
+  const homeMarkerRef = useRef<LeafletMarker | null>(null);
+  const vehiclePathRef = useRef<[number, number][]>([]);
+
+  // Keep references to layers we add so we can remove/cleanup precisely
+  const ownedLayersRef = useRef<Set<Layer>>(new Set());
+  const polylineRef = useRef<L.Polyline | null>(null);
+  const waypointsLoadedRef = useRef<boolean>(false);
+
+  // ---- Initialize map once ----
+  useEffect(() => {
+    if (!containerRef.current || mapRef.current) return;
+
+    const map = L.map(containerRef.current).setView([centerLat, centerLon], initialZoom);
+    mapRef.current = map;
+
+    // Base layers
+    const street = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom }).addTo(map);
+    const hot = L.tileLayer("https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png", { maxZoom }).addTo(map);
+    const googleSat = L.tileLayer("http://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}", {
+      maxZoom,
+      subdomains: ["mt0", "mt1", "mt2", "mt3"],
+    }).addTo(map);
+
+    const overlays: Record<string, Layer> = { Street: street, HOT: hot, Satellite: googleSat };
+    L.control.layers(undefined, overlays).addTo(map);
+
+    return () => {
+      overlays && Object.values(overlays).forEach((l) => map.removeLayer(l));
+      map.remove();
+      mapRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [centerLat, centerLon, initialZoom, maxZoom]);
 
   // ---- Load waypoints once ----
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    const load = async () => {
+      if (waypointsLoadedRef.current) return;
       try {
         const res = await fetch(waypointsUrl);
         if (!res.ok) throw new Error(`Waypoints HTTP ${res.status}`);
-        const data: { lat: number; lng: number; proximityRadius?: number }[] = await res.json();
-        if (!cancelled) setWaypoints(data || []);
+        const waypoints: { lat: number; lng: number; proximityRadius?: number }[] = await res.json();
+        if (cancelled) return;
+        drawWaypoints(waypoints);
+        waypointsLoadedRef.current = true;
       } catch (e) {
         // eslint-disable-next-line no-console
         console.warn("Waypoints load failed:", e);
       }
-    })();
+    };
+    load();
     return () => {
       cancelled = true;
     };
@@ -79,134 +102,125 @@ export function MapWidget() {
   // ---- Update vehicle overlays whenever attrs change ----
   useEffect(() => {
     if (lat == null || lon == null) return; // need both to plot
+    updateVehicle(lat, lon, heading ?? 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lat, lon, heading, maxPathLength, vehicleIconUrl, homeIconUrl]);
 
-    // Set home once at first valid coordinate
-    setHome((prev) => prev ?? [lat, lon]);
+  // ---- Drawing helpers ----
+  const drawWaypoints = (waypoints: { lat: number; lng: number; proximityRadius?: number }[]) => {
+    const map = mapRef.current;
+    if (!map) return;
 
-    // append to trail
-    setPath((prev) => {
-      const next = [...prev, [lat, lon] as [number, number]];
-      if (next.length > maxPathLength) next.shift();
-      return next;
+    // Clear previous waypoint layers we own (markers, circles, polyline)
+    ownedLayersRef.current.forEach((layer) => {
+      map.removeLayer(layer);
+    });
+    ownedLayersRef.current.clear();
+
+    if (!waypoints || waypoints.length === 0) return;
+
+    waypoints.forEach((point, index) => {
+      const marker = L.marker([point.lat, point.lng], {
+        icon: L.divIcon({
+          className: "waypoint-icon",
+          html: `<div class="waypoint-label">${index}</div>`,
+          iconSize: [25, 25],
+          iconAnchor: [12, 12],
+        }),
+        draggable: false,
+      }).addTo(map);
+      ownedLayersRef.current.add(marker);
+
+      if (point.proximityRadius) {
+        const circle = L.circle([point.lat, point.lng], { radius: point.proximityRadius }).addTo(map);
+        ownedLayersRef.current.add(circle);
+      }
     });
 
-    // rotate marker if available
-    const hdg = Number.isFinite(heading as number) ? (heading as number) : 0;
-    if (vehicleMarkerRef.current?.setRotationAngle) {
-      vehicleMarkerRef.current.setRotationAngle(hdg);
-      vehicleMarkerRef.current.setRotationOrigin?.("center center");
+    if (waypoints.length > 1) {
+      const latlngs = waypoints.map((p) => [p.lat, p.lng]) as [number, number][];
+      const poly = L.polyline(latlngs, { color: "yellow" }).addTo(map);
+      ownedLayersRef.current.add(poly);
+      polylineRef.current = poly;
+    } else {
+      polylineRef.current = null;
     }
-  }, [lat, lon, heading, maxPathLength]);
 
-  // ---- Icons ----
-  const vehicleIcon = useMemo(
-    () => L.icon({ iconUrl: vehicleIconUrl, iconSize: [40, 40], iconAnchor: [20, 20] }),
-    []
-  );
-  const homeIcon = useMemo(
-    () => L.icon({ iconUrl: homeIconUrl, iconSize: [40, 40], iconAnchor: [20, 20] }),
-    []
-  );
+    // Ensure vehicle overlays remain visible
+    if (headingLineRef.current) headingLineRef.current.addTo(map);
+    if (pathPolylineRef.current) pathPolylineRef.current.addTo(map);
+    if (homeMarkerRef.current) homeMarkerRef.current.addTo(map);
+    if (vehicleMarkerRef.current) vehicleMarkerRef.current.addTo(map);
+  };
 
-  // ---- Derived values ----
-  const mapCenter = useMemo<LatLngExpression>(() => [centerLat, centerLon], [centerLat, centerLon]);
-  const endOfHeading = useMemo<[number, number] | null>(() => {
-    if (lat == null || lon == null) return null;
-    const hdg = Number.isFinite(heading as number) ? (heading as number) : 0;
-    return calculateEndpoint(lat, lon, hdg, 1000);
-  }, [lat, lon, heading]);
+  const updateVehicle = (latitude: number, longitude: number, headingDeg: number) => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    // Home point (only once)
+    if (!homeMarkerRef.current) {
+      homeMarkerRef.current = L.marker([latitude, longitude], {
+        icon: L.icon({ iconUrl: homeIconUrl, iconSize: [40, 40], iconAnchor: [20, 20] }),
+      }).addTo(map);
+    }
+
+    // Vehicle marker
+    if (vehicleMarkerRef.current) {
+      vehicleMarkerRef.current.setLatLng([latitude, longitude]);
+      vehicleMarkerRef.current.setRotationAngle?.(headingDeg);
+    } else {
+      const marker = L.marker([latitude, longitude], {
+        icon: L.icon({ iconUrl: vehicleIconUrl, iconSize: [40, 40], iconAnchor: [20, 20] }),
+      }) as LeafletMarker;
+      marker.setRotationAngle?.(headingDeg);
+      marker.setRotationOrigin?.("center center");
+      marker.addTo(map);
+      vehicleMarkerRef.current = marker;
+    }
+
+    // Heading line (1 km)
+    const headingLength = 1000;
+    const endLatLng = calculateEndpoint(latitude, longitude, headingDeg, headingLength);
+
+    if (headingLineRef.current) {
+      headingLineRef.current.setLatLngs([[latitude, longitude], endLatLng]);
+    } else {
+      headingLineRef.current = L.polyline([[latitude, longitude], endLatLng], { color: "black", weight: 2 }).addTo(map);
+    }
+
+    // Vehicle path
+    const path = vehiclePathRef.current;
+    path.push([latitude, longitude]);
+    if (path.length > maxPathLength) path.shift();
+
+    if (pathPolylineRef.current) {
+      pathPolylineRef.current.setLatLngs(path);
+    } else {
+      pathPolylineRef.current = L.polyline(path, { color: "purple", weight: 2 }).addTo(map);
+    }
+
+    // Auto-focus if outside view
+    if (!map.getBounds().contains([latitude, longitude])) {
+      map.setView([latitude, longitude]);
+    }
+  };
+
+  // Cleanup overlays on unmount
+  useEffect(() => {
+    return () => {
+      const map = mapRef.current;
+      if (!map) return;
+      [vehicleMarkerRef.current, headingLineRef.current, pathPolylineRef.current, homeMarkerRef.current, polylineRef.current]
+        .forEach((layer) => layer && map.removeLayer(layer));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
-    <MapContainer
-      center={mapCenter}
-      zoom={initialZoom}
-      style={{ width: "100%", height: "100%" }}
-      scrollWheelZoom
-    >
-      <MapInitialZoom zoom={initialZoom} />
-      <LayersControl position="topright">
-        <MapFollow lat={lat} lon={lon} />
-        <LayersControl.BaseLayer checked name="Street">
-          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" maxZoom={maxZoom} />
-        </LayersControl.BaseLayer>
-        <LayersControl.BaseLayer name="HOT">
-          <TileLayer url="https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png" maxZoom={maxZoom} />
-        </LayersControl.BaseLayer>
-        <LayersControl.BaseLayer name="Satellite">
-          <TileLayer
-            url="https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
-            maxZoom={maxZoom}
-            subdomains={["mt0", "mt1", "mt2", "mt3"]}
-          />
-        </LayersControl.BaseLayer>
-      </LayersControl>
-
-      {/* Waypoints: markers + proximity circles + connecting polyline */}
-      {waypoints.map((wp, i) => (
-        <React.Fragment key={`wp-${i}`}>
-          <Marker position={[wp.lat, wp.lng]} icon={waypointIcon(i)} />
-          {wp.proximityRadius ? (
-            <Circle center={[wp.lat, wp.lng]} radius={wp.proximityRadius} />
-          ) : null}
-        </React.Fragment>
-      ))}
-      {waypoints.length > 1 && (
-        <Polyline positions={waypoints.map((w) => [w.lat, w.lng]) as [number, number][]}
-                  pathOptions={{ color: "yellow" }} />
-      )}
-
-      {/* Home marker (first coordinate seen) */}
-      {home && <Marker position={home} icon={homeIcon} />}
-
-      {/* Vehicle marker with rotation via ref to LeafletMarker */}
-      {lat != null && lon != null && (
-        <Marker
-          position={[lat, lon]}
-          icon={vehicleIcon}
-          zIndexOffset={10000}
-          ref={(marker) => {
-            // react-leaflet passes Leaflet instance via this ref
-            // setRotationAngle only exists after leaflet-rotatedmarker side-effect import
-            vehicleMarkerRef.current = (marker as any)?._leaflet_id ? (marker as any) : (marker as unknown as LeafletMarker);
-            // Try to rotate immediately
-            const hdg = Number.isFinite(heading as number) ? (heading as number) : 0;
-            vehicleMarkerRef.current?.setRotationAngle?.(hdg);
-            vehicleMarkerRef.current?.setRotationOrigin?.("center center");
-          }}
-        />
-      )}
-
-      {/* Heading line (1 km) */}
-      {lat != null && lon != null && endOfHeading && (
-        <Polyline positions={[[lat, lon], endOfHeading]} pathOptions={{ color: "black", weight: 2 }} />
-      )}
-
-      {/* Path trail */}
-      {path.length > 1 && (
-        <Polyline positions={path} pathOptions={{ color: "purple", weight: 2 }} />
-      )}
-    </MapContainer>
+    <div
+      ref={containerRef}
+      style={{ width: "100%", height: "100%", position: "relative" }}
+      aria-label="Leaflet Map"
+    />
   );
-}
-
-function MapFollow({ lat, lon }: { lat?: number | null; lon?: number | null }) {
-  const { useMapAutofocus } = require("./hooks/map/use-map-autofocus") as typeof import("./hooks/map/use-map-autofocus");
-  useMapAutofocus(lat ?? undefined, lon ?? undefined, {
-    enabled: true,
-    mode: "pan",        // "fly" for smooth flight, "set" for immediate setView
-    debounceMs: 150,    // small debounce to smooth GPS jitter
-    keepZoom: true,     // keep current zoom while following
-    minMoveMeters: 0    // set >0 to ignore tiny jitter
-  });
-  return null;
-}
-
-function MapInitialZoom({ zoom }: { zoom?: number | null }) {
-  const map = useMap();
-  useEffect(() => {
-    if (zoom == null || !Number.isFinite(zoom)) return;
-    // Preserve current center; just apply the zoom once attr is available/changes
-    map.setZoom(zoom as number, { animate: false });
-  }, [zoom, map]);
-  return null;
 }
