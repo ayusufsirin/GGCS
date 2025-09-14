@@ -84,10 +84,6 @@ const gaugeWidget: Widget = {
 export const config: Entity = {
   tabs: {
     items: {
-      settings: {
-        label: "Settings",
-        widget: { name: "settings", config: {} }
-      },
       home: {
         label: "Home",
         grids: {
@@ -111,7 +107,7 @@ export const config: Entity = {
               widget: hudWidget
             },
             gauge: {
-              label: "HUD",
+              label: "Gauge",
               width: 4,
               height: 4,
               x: 0,
@@ -119,7 +115,7 @@ export const config: Entity = {
               widget: gaugeWidget
             },
             panel: {
-              label: "HUD",
+              label: "Panel",
               width: 4,
               height: 4,
               x: 0,
@@ -139,6 +135,10 @@ export const config: Entity = {
             }
           }
         }
+      },
+      settings: {
+        label: "Settings",
+        widget: { name: "settings", config: {} }
       },
     }
   }
