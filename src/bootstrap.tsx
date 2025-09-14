@@ -26,6 +26,7 @@ function WidgetFrame({ instanceId, name }: { instanceId: string; name: string })
 }
 
 // ---- Grid renderer (CSS grid) ----
+// GridView(): make the grid itself 100% tall, and rows share space evenly
 function GridView({
                     tabKey,
                     grid,
@@ -52,9 +53,11 @@ function GridView({
     <div
       style={{
         display: "grid",
+        height: "100%", // ← CHANGED (let the grid fill available height)
         gridTemplateColumns: `repeat(${cols}, 1fr)`,
-        gridTemplateRows: `repeat(${rows}, 1fr)`,
+        gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`, // ← CHANGED (equal-height rows, clamp content)
         gap: 8,
+        minHeight: 0, // helpful inside flex
       }}
     >
       {Object.entries(grid.items ?? {}).map(([itemKey, item]) => {
@@ -68,10 +71,16 @@ function GridView({
               border: "1px solid rgba(255,255,255,0.08)",
               borderRadius: 8,
               padding: 8,
+              height: "100%",              // ← CHANGED (tile fills its grid area)
+              display: "flex",             // optional: let widget stretch
+              flexDirection: "column",
+              minHeight: 0,
             }}
             title={item.label ?? itemKey}
           >
-            <WidgetFrame instanceId={instanceId} name={item.widget?.name}/>
+            <div style={{ flex: 1, minHeight: 0 /* optional wrapper for scrollable content */ }}>
+              <WidgetFrame instanceId={instanceId} name={item.widget?.name}/>
+            </div>
           </div>
         );
       })}
@@ -80,11 +89,12 @@ function GridView({
 }
 
 // ---- Tab body (either single widget or a grid) ----
+// TabBody(): ensure inner container fills its parent (minus padding)
 function TabBody({ tabKey, tab }: { tabKey: string; tab: any }) {
   if (tab?.widget) {
     const instanceId = `tabs.items.${tabKey}`;
     return (
-      <div style={{ padding: 8 }}>
+      <div style={{ padding: 8, height: "100%", boxSizing: "border-box" /* ← CHANGED */ }}>
         <WidgetFrame instanceId={instanceId} name={tab.widget.name}/>
       </div>
     );
@@ -92,32 +102,36 @@ function TabBody({ tabKey, tab }: { tabKey: string; tab: any }) {
 
   if (tab?.grids) {
     return (
-      <div style={{ padding: 8 }}>
+      <div style={{ padding: 8, height: "100%", boxSizing: "border-box" /* ← CHANGED */ }}>
         <GridView tabKey={tabKey} grid={tab.grids}/>
       </div>
     );
   }
 
-  return <div style={{ padding: 8, opacity: 0.6 }}>No layout for this tab.</div>;
+  return <div style={{ padding: 8, height: "100%", boxSizing: "border-box" }}>No layout for this tab.</div>;
 }
 
 // ---- Top-level dashboard with auto tabs + grids ----
+// Dashboard(): make the whole app take the viewport height
 export function Dashboard() {
-  // Build bindings once (or whenever config changes)
   const bindings = useMemo(() => collectInstanceBindings(config), []);
   useEffect(() => {
     const detach = attachBindings(bindings);
     return () => detach();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // attach once on mount
+  }, []); // attach once
 
   const tabs = (config as any)?.tabs?.items ?? {};
   const tabKeys = Object.keys(tabs);
   const [activeKey, setActiveKey] = useState<string>(tabKeys[0] ?? "");
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      {/* Tabs header */}
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100vh",           // ← CHANGED (ensure full viewport height)
+      }}
+    >
       <div style={{ display: "flex", gap: 8, padding: 8, borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
         {tabKeys.map((k) => {
           const label = tabs[k]?.label ?? k;
@@ -142,8 +156,8 @@ export function Dashboard() {
         })}
       </div>
 
-      {/* Active tab body */}
-      <div style={{ flex: 1, overflow: "auto" }}>
+      {/* Active tab body fills remaining space */}
+      <div style={{ flex: 1, minHeight: 0 /* ← CHANGED to allow child to size */ }}>
         {activeKey ? <TabBody tabKey={activeKey} tab={tabs[activeKey]}/> : null}
       </div>
     </div>
