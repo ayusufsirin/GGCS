@@ -1,7 +1,27 @@
 import { Entity, Topic, Widget } from "./interfaces";
 
+const rollTopic: Topic = {
+  name: "/roll",
+  type: "std_msgs/msg/Float64"
+};
+
+const pitchTopic: Topic = {
+  name: "/pitch",
+  type: "std_msgs/msg/Float64"
+};
+
+const headingTopic: Topic = {
+  name: "/heading",
+  type: "std_msgs/msg/Float64"
+};
+
 const speedTopic: Topic = {
   name: "/speed",
+  type: "std_msgs/msg/Float64"
+};
+
+const altitudeTopic: Topic = {
+  name: "/altitude",
   type: "std_msgs/msg/Float64"
 };
 
@@ -18,16 +38,34 @@ const gpsTopic: Topic = {
 const hudWidget: Widget = {
   name: "hud",
   config: {
+    roll: {
+      label: "Speed (m/s)",
+      type: "topic",
+      topic: rollTopic,
+      topicField: ".data"
+    },
+    pitch: {
+      label: "Speed (m/s)",
+      type: "topic",
+      topic: pitchTopic,
+      topicField: ".data"
+    },
+    heading: {
+      label: "Speed (m/s)",
+      type: "topic",
+      topic: headingTopic,
+      topicField: ".data"
+    },
     speed: {
       label: "Speed (m/s)",
       type: "topic",
       topic: speedTopic,
       topicField: ".data"
     },
-    acceleration: {
-      label: "Acceleration (m/s^2)",
+    altitude: {
+      label: "Speed (m/s)",
       type: "topic",
-      topic: accelTopic,
+      topic: altitudeTopic,
       topicField: ".data"
     }
   }
