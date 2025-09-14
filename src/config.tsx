@@ -95,26 +95,26 @@ const mapWidget: Widget = {
   }
 };
 
-const gaugeWidget: Widget = {
+const speedGaugeWidget: Widget = {
   name: "gauge",
   config: {
-    speed: {
+    value: {
       label: "Speed (m/s)",
       type: "topic",
       topic: speedTopic,
       topicField: ".data"
-    },
+    }
+  }
+};
+
+const accelGaugeWidget: Widget = {
+  name: "gauge",
+  config: {
     acceleration: {
       label: "Acceleration (m/s^2)",
       type: "topic",
       topic: accelTopic,
       topicField: ".data"
-    },
-    gpsStatus: {
-      label: "GPS Status",
-      type: "topic",
-      topic: gpsTopic,
-      topicField: ".status.status"
     }
   }
 };
@@ -144,30 +144,47 @@ export const config: Entity = {
               y: 0,
               widget: hudWidget
             },
-            gauge: {
-              label: "Gauge",
-              width: 4,
-              height: 4,
-              x: 0,
-              y: 4,
-              widget: gaugeWidget
-            },
             panel: {
               label: "Panel",
               width: 4,
-              height: 4,
+              height: 8,
               x: 0,
-              y: 8,
+              y: 4,
               tabs: {
                 items: {
                   actions: {
                     label: "Actions",
-                    widget: mapWidget
+                    widget: {name: "action", config: {}}
                   },
                   healthCheck: {
                     label: "Health Check",
-                    widget: gaugeWidget
+                    widget: {name: "action", config: {}}
                   },
+                  gauges:{
+                    label: "Gauges",
+                    grids: {
+                      horizontal: 2,
+                      vertical: 2,
+                      items:{
+                        speed: {
+                          label: "Speed",
+                          width: 1,
+                          height: 1,
+                          x: 0,
+                          y: 0,
+                          widget: speedGaugeWidget
+                        },
+                        accel: {
+                          label: "Accel",
+                          width: 1,
+                          height: 1,
+                          x: 1,
+                          y: 0,
+                          widget: accelGaugeWidget
+                        },
+                      }
+                    }
+                  }
                 }
               }
             }
