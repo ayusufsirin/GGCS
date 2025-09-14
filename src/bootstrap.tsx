@@ -124,80 +124,130 @@ function GridView({
                     grid,
                     path,
                   }: {
-  grid: GridNode;
+  grid: {
+    horizontal: number;
+    vertical: number;
+    items: Record<
+      string,
+      {
+        label?: string;
+        width: number;
+        height: number;
+        x: number;
+        y: number;
+        widget?: { name: string; config?: Record<string, unknown> };
+        tabs?: { items: Record<string, any> };
+        grids?: any;
+      }
+      >;
+  };
   path: string[];
 }) {
   const cols = Math.max(1, grid.horizontal ?? 12);
   const rows = Math.max(1, grid.vertical ?? 8);
 
   const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
-  const occupied = new Set<string>();
-  const markCells = (y0: number, x0: number, h: number, w: number, id: string) => {
-    let overlap = false;
-    for (let r = y0; r < y0 + h; r++) {
-      for (let c = x0; c < x0 + w; c++) {
-        const key = `${r},${c}`;
-        if (occupied.has(key)) overlap = true;
-        occupied.add(key);
-      }
-    }
-    if (overlap) console.warn(`[grid:${joinPath(path)}] overlap detected for "${id}" at (${x0},${y0}) span ${w}x${h}`);
+
+  type Layout = {
+    key: string;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    overlap: boolean;
+    node: any;
+    itemPath: string[];
   };
 
-  return (
-    <div
-      style={{
-        display: "grid",
-        height: "100%",
-        gridTemplateColumns: `repeat(${cols}, 1fr)`,
-        gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
-        gridAutoColumns: "minmax(0, 1fr)",
-        gridAutoRows: "minmax(0, 1fr)",
-        gap: 8,
-        minHeight: 0,
-        // optional faint gridlines without affecting layout:
-        backgroundImage: `
-          linear-gradient(to right, rgba(255,255,255,0.08) 1px, transparent 1px),
-          linear-gradient(to bottom, rgba(255,255,255,0.08) 1px, transparent 1px)
-        `,
-        backgroundSize: `calc(100% / ${cols}) 100%, 100% calc(100% / ${rows})`,
-        backgroundPosition: "0 0, 0 0",
-        backgroundRepeat: "repeat",
-      }}
-    >
-      {Object.entries(grid.items ?? {}).map(([itemKey, item]) => {
-        const rawX = Number.isFinite(item.x) ? item.x : 0;
-        const rawY = Number.isFinite(item.y) ? item.y : 0;
-        const x = clamp(rawX, 0, cols - 1);
-        const y = clamp(rawY, 0, rows - 1);
-        const maxW = cols - x;
-        const maxH = rows - y;
-        const wantedW = Number.isFinite(item.width) ? item.width : 1;
-        const wantedH = Number.isFinite(item.height) ? item.height : 1;
-        const w = clamp(wantedW, 1, Math.max(1, maxW));
-        const h = clamp(wantedH, 1, Math.max(1, maxH));
+  const entries = Object.entries(grid.items ?? {});
+  const layouts: Layout[] = [];
+  const cellOwner = new Map<string, number>(); // "r,c" -> layout index
+  const overlappedCells = new Set<string>();
 
-        if (w !== wantedW || h !== wantedH || x !== rawX || y !== rawY) {
-          console.warn(
-            `[grid:${joinPath(path)}] clamped "${itemKey}" from x:${rawX},y:${rawY},w:${wantedW},h:${wantedH} -> x:${x},y:${y},w:${w},h:${h}`
-          );
+  // Precompute layouts + overlaps
+  entries.forEach(([itemKey, item], idx) => {
+    const rawX = Number.isFinite(item.x) ? item.x : 0;
+    const rawY = Number.isFinite(item.y) ? item.y : 0;
+    const x = clamp(rawX, 0, cols - 1);
+    const y = clamp(rawY, 0, rows - 1);
+    const maxW = cols - x;
+    const maxH = rows - y;
+    const wantedW = Number.isFinite(item.width) ? item.width : 1;
+    const wantedH = Number.isFinite(item.height) ? item.height : 1;
+    const w = clamp(wantedW, 1, Math.max(1, maxW));
+    const h = clamp(wantedH, 1, Math.max(1, maxH));
+
+    if (w !== wantedW || h !== wantedH || x !== rawX || y !== rawY) {
+      console.warn(
+        `[grid:${path.join(".")}] clamped "${itemKey}" from x:${rawX},y:${rawY},w:${wantedW},h:${wantedH} -> x:${x},y:${y},w:${w},h:${h}`
+      );
+    }
+
+    const layout: Layout = {
+      key: itemKey,
+      x,
+      y,
+      w,
+      h,
+      overlap: false,
+      node: {
+        widget: item.widget,
+        tabs: item.tabs as any,
+        grids: item.grids as any,
+      },
+      itemPath: [...path, "grids", "items", itemKey],
+    };
+
+    // detect overlaps cell-by-cell
+    for (let r = y; r < y + h; r++) {
+      for (let c = x; c < x + w; c++) {
+        const ck = `${r},${c}`;
+        const prev = cellOwner.get(ck);
+        if (prev === undefined) {
+          cellOwner.set(ck, idx);
+        } else {
+          layout.overlap = true;
+          layouts[prev] && (layouts[prev].overlap = true); // flag the previous tile as overlapping too
+          overlappedCells.add(ck);
         }
-        markCells(y, x, h, w, itemKey);
+      }
+    }
 
-        const itemPath = [...path, "grids", "items", itemKey];
-        const node: AnyNode = {
-          widget: item.widget,
-          tabs: item.tabs as any,
-          grids: item.grids as any,
-        };
+    layouts.push(layout);
+  });
 
-        return (
+  return (
+    <div style={{ position: "relative", height: "100%" }}>
+      {/* Main grid */}
+      <div
+        style={{
+          display: "grid",
+          height: "100%",
+          gridTemplateColumns: `repeat(${cols}, 1fr)`,
+          gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
+          gridAutoColumns: "minmax(0, 1fr)",
+          gridAutoRows: "minmax(0, 1fr)",
+          gap: 8,
+          minHeight: 0,
+          backgroundImage: `
+            linear-gradient(to right, rgba(255,255,255,0.08) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(255,255,255,0.08) 1px, transparent 1px)
+          `,
+          backgroundSize: `calc(100% / ${cols}) 100%, 100% calc(100% / ${rows})`,
+          backgroundPosition: "0 0, 0 0",
+          backgroundRepeat: "repeat",
+        }}
+      >
+        {layouts.map((L) => (
           <div
-            key={itemKey}
+            key={L.key}
             style={{
-              gridColumn: `${x + 1} / span ${w}`,
-              gridRow: `${y + 1} / span ${h}`,
-              boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.12)",
+              gridColumn: `${L.x + 1} / span ${L.w}`,
+              gridRow: `${L.y + 1} / span ${L.h}`,
+              // normal faint outline; if overlapping, paint strong red
+              boxShadow: L.overlap
+                ? "inset 0 0 0 2px rgba(244,67,54,0.9)"
+                : "inset 0 0 0 1px rgba(255,255,255,0.12)",
               borderRadius: 8,
               padding: 8,
               height: "100%",
@@ -206,14 +256,47 @@ function GridView({
               minHeight: 0,
               overflow: "hidden",
             }}
-            title={item.label ?? itemKey}
+            title={L.key}
           >
             <div style={{ flex: 1, minHeight: 0 }}>
-              <RenderNode node={node} path={itemPath} />
+              <RenderNode node={L.node} path={L.itemPath} />
             </div>
           </div>
-        );
-      })}
+        ))}
+      </div>
+
+      {/* Overlap overlay grid (does not affect layout / clicks) */}
+      {overlappedCells.size > 0 && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            pointerEvents: "none",
+            display: "grid",
+            gridTemplateColumns: `repeat(${cols}, 1fr)`,
+            gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
+            gap: 8,
+          }}
+        >
+          {Array.from(overlappedCells).map((ck) => {
+            const [rStr, cStr] = ck.split(",");
+            const r = Number(rStr);
+            const c = Number(cStr);
+            return (
+              <div
+                key={ck}
+                style={{
+                  gridColumn: `${c + 1} / span 1`,
+                  gridRow: `${r + 1} / span 1`,
+                  background: "rgba(244,67,54,0.22)", // translucent fill
+                  boxShadow: "inset 0 0 0 2px rgba(244,67,54,0.85)", // red cell border
+                  borderRadius: 6,
+                }}
+              />
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
