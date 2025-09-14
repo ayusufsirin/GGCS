@@ -9,6 +9,7 @@ export function HUDWidget() {
     <div>
       <div>Speed: {speed?.toFixed?.(2) ?? "—"} m/s</div>
       <div>Accel: {accel?.toFixed?.(2) ?? "—"} m/s²</div>
+      <div>GPS Status: {status?? "—"} m/s²</div>
     </div>
   );
 }

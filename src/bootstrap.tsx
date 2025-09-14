@@ -118,7 +118,7 @@ export function Dashboard() {
   useEffect(() => {
     const detach = attachBindings(bindings);
     return () => detach();
-  }, []); // attach once
+  }, [bindings]); // attach once
 
   const tabs = (config as any)?.tabs?.items ?? {};
   const tabKeys = Object.keys(tabs);
