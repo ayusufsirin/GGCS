@@ -97,7 +97,39 @@ const speedGaugeWidget: Widget = {
     },
     label: {
       type: "constant",
-      constant: "Speed (m/s)",
+      constant: "Speed",
+    },
+    units: {
+      type: "constant",
+      constant: "(m/s)",
+    },
+    min: {
+      type: "constant",
+      constant: 0.0,
+    },
+    max: {
+      type: "constant",
+      constant: 10.0,
+    },
+    decimals: {
+      type: "constant",
+      constant: 2,
+    },
+    warn: {
+      type: "constant",
+      constant: 3,
+    },
+    danger: {
+      type: "constant",
+      constant: 7,
+    },
+    segments: {
+      type: "constant",
+      constant: 10,
+    },
+    needleColor: {
+      type: "constant",
+      constant: "#dc3939",
     }
   }
 };
@@ -112,7 +144,11 @@ const accelGaugeWidget: Widget = {
     },
     label: {
       type: "constant",
-      constant: "Acceleration (m/s^2)",
+      constant: "Acceleration",
+    },
+    units: {
+      type: "constant",
+      constant: "(m/s^2)",
     }
   }
 };
