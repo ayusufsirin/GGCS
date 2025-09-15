@@ -12,6 +12,7 @@
     "@types/react": "^19.1.13",
     "@types/react-dom": "^19.1.9",
     "react": "^19.1.1",
+    "react-d3-speedometer": "^3.1.1",
     "react-dom": "^19.1.1",
     "react-drone-hud": "^0.0.1-rc0",
     "react-scripts": "5.0.1",
