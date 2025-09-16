@@ -14,6 +14,12 @@ export type ServiceBinding = {
   service: Service;   // { name, type }
 };
 
+export type ConstantBinding = {
+  instanceId: string; // widget instance path
+  attrName: string;   // attribute name (e.g., "title")
+  value: unknown;     // literal value taken from config
+};
+
 // ---------- utils ----------
 function makeInstanceId(path: string[]) {
   return path.join(".");
@@ -113,4 +119,14 @@ export function collectServiceBindings(config: unknown): ServiceBinding[] {
   );
 }
 
-
+export function collectConstantBindings(config: unknown): ConstantBinding[] {
+  return collectBindings<ConstantBinding>(
+    config,
+    // match
+    (e) => e.type === "constant" && "constant" in e,
+    // map
+    ({instanceId, attrName, entry}) => {
+      return { instanceId, attrName, value: (entry as any).constant };
+    }
+  );
+}

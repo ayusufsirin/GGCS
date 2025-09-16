@@ -16,13 +16,14 @@ export interface Service {
 
 // TODO: Make fields depend on type
 export interface Value {
-  label: string;
-  type: "topic" | "service";
+  type: "topic" | "service" | "constant";
   // topic interface fields
   topic?: Topic;
   topicField?: string;
   // service interface fields
   service?: Service;
+  // constant interface fields
+  constant?: unknown;
 }
 
 export interface Widget {

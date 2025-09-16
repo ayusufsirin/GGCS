@@ -39,31 +39,26 @@ const hudWidget: Widget = {
   name: "hud",
   config: {
     roll: {
-      label: "Speed (m/s)",
       type: "topic",
       topic: rollTopic,
       topicField: ".data"
     },
     pitch: {
-      label: "Speed (m/s)",
       type: "topic",
       topic: pitchTopic,
       topicField: ".data"
     },
     heading: {
-      label: "Speed (m/s)",
       type: "topic",
       topic: headingTopic,
       topicField: ".data"
     },
     speed: {
-      label: "Speed (m/s)",
       type: "topic",
       topic: speedTopic,
       topicField: ".data"
     },
     altitude: {
-      label: "Speed (m/s)",
       type: "topic",
       topic: altitudeTopic,
       topicField: ".data"
@@ -75,19 +70,16 @@ const mapWidget: Widget = {
   name: "map",
   config: {
     latitude: {
-      label: "Latitude",
       type: "topic",
       topic: gpsTopic,
       topicField: ".latitude"
     },
     longitude: {
-      label: "Longitude",
       type: "topic",
       topic: gpsTopic,
       topicField: ".longitude"
     },
     heading: {
-      label: "Heading",
       type: "topic",
       topic: headingTopic,
       topicField: ".data"
@@ -99,10 +91,13 @@ const speedGaugeWidget: Widget = {
   name: "gauge",
   config: {
     value: {
-      label: "Speed (m/s)",
       type: "topic",
       topic: speedTopic,
       topicField: ".data"
+    },
+    label: {
+      type: "constant",
+      constant: "Speed (m/s)",
     }
   }
 };
@@ -110,11 +105,14 @@ const speedGaugeWidget: Widget = {
 const accelGaugeWidget: Widget = {
   name: "gauge",
   config: {
-    acceleration: {
-      label: "Acceleration (m/s^2)",
+    value: {
       type: "topic",
       topic: accelTopic,
       topicField: ".data"
+    },
+    label: {
+      type: "constant",
+      constant: "Acceleration (m/s^2)",
     }
   }
 };
@@ -157,16 +155,18 @@ export const config: Entity = {
                     widget: {
                       name: "sample", config: {
                         speed: {
-                          label: "Speed (m/s)",
                           type: "topic",
                           topic: speedTopic,
                           topicField: ".data"
                         },
+                        speedLabel: {
+                          type: "constant",
+                          constant: "Speed (m/s)",
+                        },
                         reset: {
-                          label: "Reset",
                           type: "service",
                           service: {name: "/reset", type: "std_srvs/srv/Trigger"}
-                        },
+                        }
                       }
                     }
                   },
@@ -178,12 +178,12 @@ export const config: Entity = {
                     label: "Health Check",
                     widget: {name: "action", config: {}}
                   },
-                  gauges:{
+                  gauges: {
                     label: "Gauges",
                     grids: {
                       horizontal: 2,
                       vertical: 2,
-                      items:{
+                      items: {
                         speed: {
                           label: "Speed",
                           width: 1,

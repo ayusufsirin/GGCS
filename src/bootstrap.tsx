@@ -1,12 +1,13 @@
 // bootstrap.tsx
 import React, { useEffect, useMemo, useState } from "react";
-import { collectTopicBindings, collectServiceBindings } from "./middleware/config-scan";
+import { collectTopicBindings, collectServiceBindings, collectConstantBindings } from "./middleware/config-scan";
 import { attachTopicBindings } from "./middleware/binders/topics";
 import { attachServiceBindings } from "./middleware/binders/services";
 import { WidgetAttrProvider } from "./middleware/hooks/common";
 import { config } from "./config";
 import { WIDGETS } from "./widgets/widgets";
 import { FallbackWidget } from "./widgets/FallbackWidget";
+import { attachConstantBindings } from "./middleware/binders/constants";
 
 // ---------- Shared helpers ----------
 const joinPath = (path: string[]) => path.join(".");
@@ -225,14 +226,17 @@ export function Dashboard() {
   // Bind once for the whole config (scanner already recursive)
   const topicBindings = useMemo(() => collectTopicBindings(config), []);
   const serviceBindings = useMemo(() => collectServiceBindings(config), []);
+  const constantBindings = useMemo(() => collectConstantBindings(config), []);
   useEffect(() => {
     const offTopics = attachTopicBindings(topicBindings);
     const offServices = attachServiceBindings(serviceBindings);
+    const offConstants = attachConstantBindings(constantBindings);
     return () => {
-      offServices();
       offTopics();
+      offServices();
+      offConstants();
     };
-  }, [topicBindings, serviceBindings]);
+  }, [topicBindings, serviceBindings, constantBindings]);
 
   const root: AnyNode = (config as unknown) as AnyNode;
 
