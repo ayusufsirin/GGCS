@@ -9,7 +9,19 @@ npx create-react-app ggcs --template typescript
 ## Running the Application
 
 ```bash
-npm start
+docker build . -t ggcs-react -f react.Dockerfile
+```
+
+```bash
+docker run --rm -it -v $PWD:/app/ ggcs-react npm install
+```
+
+```bash
+docker run --rm -it -v $PWD:/app/ ggcs-react npm start
+```
+
+```bash
+docker run --rm -it -v $PWD:/app/ ggcs-react npm run build
 ```
 
 ## Configuration Management
