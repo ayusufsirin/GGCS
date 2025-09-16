@@ -152,6 +152,24 @@ export const config: Entity = {
               y: 4,
               tabs: {
                 items: {
+                  sampleWidget: {
+                    label: "Sample Widget",
+                    widget: {
+                      name: "sample", config: {
+                        speed: {
+                          label: "Speed (m/s)",
+                          type: "topic",
+                          topic: speedTopic,
+                          topicField: ".data"
+                        },
+                        reset: {
+                          label: "Reset",
+                          type: "service",
+                          service: {name: "/reset", type: "std_srvs/srv/Trigger"}
+                        },
+                      }
+                    }
+                  },
                   actions: {
                     label: "Actions",
                     widget: {name: "action", config: {}}

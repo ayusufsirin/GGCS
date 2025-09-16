@@ -1,3 +1,16 @@
+import { useServiceCall } from "../middleware/hooks/use-service";
+import { useAttr } from "../middleware/hooks/use-attr";
+
 export function SampleWidget() {
-  return <div></div>
+  const speed = useAttr<number>("speed");
+  const {call: reset, pending: rPending} =
+    useServiceCall<{}, { success: boolean; message: string }>("reset");
+
+  return (
+    <div>
+      <div>Speed: {speed ?? "—"}</div>
+      <button disabled={rPending} onClick={() => reset({})}>
+        {rPending ? "Resetting…" : "Reset"}
+      </button>
+    </div>)
 }

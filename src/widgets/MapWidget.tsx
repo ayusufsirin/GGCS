@@ -1,5 +1,5 @@
 import React from "react";
-import { useAttr } from "../middleware/widget-attr";
+import { useAttr } from "../middleware/hooks/use-attr";
 
 export function MapWidget() {
   const lat = useAttr<number>("latitude");

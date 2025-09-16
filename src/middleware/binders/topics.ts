@@ -1,7 +1,7 @@
-// binder.ts
-import { InstanceBinding } from "./config-scan";
-import { sharedTopics } from "./roslib/ros-shared";
-import { instanceStore } from "./instance-store";
+// middleware/topics.ts
+import { collectTopicBindings, type TopicBinding } from "../config-scan";
+import { sharedTopics } from "../roslib/shared-topic";
+import { instanceStore } from "../instance-store";
 
 function getByPath(obj: any, dotPath: string) {
   const parts = dotPath.replace(/^\./, "").split(".").filter(Boolean);
@@ -13,10 +13,11 @@ function getByPath(obj: any, dotPath: string) {
   return cur;
 }
 
-export function attachBindings(bindings: InstanceBinding[]) {
-  // group by topic to minimize callbacks
-  const byTopic = new Map<string, InstanceBinding[]>();
-  for (const b of bindings) {
+export function attachTopicBindings(bindings?: TopicBinding[]) {
+  const list = bindings ?? collectTopicBindings((globalThis as any).config);
+  const byTopic = new Map<string, TopicBinding[]>();
+
+  for (const b of list) {
     const k = `${b.topic.name}|${b.topic.type}`;
     const arr = byTopic.get(k) ?? [];
     arr.push(b);
@@ -25,23 +26,17 @@ export function attachBindings(bindings: InstanceBinding[]) {
 
   const offs: Array<() => void> = [];
 
-  byTopic.forEach((arr /* InstanceBinding[] */, _key) => {
-    // console.debug("attachBindings", arr, arr.length);
+  byTopic.forEach((arr) => {
     if (arr.length === 0) return;
     const t = arr[0].topic;
-    // console.debug("attachBindings", t);
     const off = sharedTopics.addListener(t, (msg) => {
       arr.forEach((b) => {
         const val = getByPath(msg, b.topicField);
-        // console.debug("attachBindings", val);
         instanceStore.emit(b.instanceId, b.attrName, val);
       });
     });
-    // console.debug("attachBindings", off);
     offs.push(off);
-    // console.debug("attachBindings", offs);
   });
 
-  // detach function
   return () => offs.forEach((f) => f());
 }

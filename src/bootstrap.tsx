@@ -1,8 +1,9 @@
 // bootstrap.tsx
 import React, { useEffect, useMemo, useState } from "react";
-import { collectInstanceBindings } from "./middleware/config-scan";
-import { attachBindings } from "./middleware/binder";
-import { WidgetAttrProvider } from "./middleware/widget-attr";
+import { collectTopicBindings, collectServiceBindings } from "./middleware/config-scan";
+import { attachTopicBindings } from "./middleware/binders/topics";
+import { attachServiceBindings } from "./middleware/binders/services";
+import { WidgetAttrProvider } from "./middleware/hooks/common";
 import { config } from "./config";
 import { WIDGETS } from "./widgets/widgets";
 import { FallbackWidget } from "./widgets/FallbackWidget";
@@ -220,12 +221,18 @@ function GridView({
 
 // ---------- Top-level dashboard ----------
 export function Dashboard() {
+  // TODO: Bindings may be isolated from bootstrap. Move under middlewares
   // Bind once for the whole config (scanner already recursive)
-  const bindings = useMemo(() => collectInstanceBindings(config), []);
+  const topicBindings = useMemo(() => collectTopicBindings(config), []);
+  const serviceBindings = useMemo(() => collectServiceBindings(config), []);
   useEffect(() => {
-    const detach = attachBindings(bindings);
-    return () => detach();
-  }, [bindings]);
+    const offTopics = attachTopicBindings(topicBindings);
+    const offServices = attachServiceBindings(serviceBindings);
+    return () => {
+      offServices();
+      offTopics();
+    };
+  }, [topicBindings, serviceBindings]);
 
   const root: AnyNode = (config as unknown) as AnyNode;
 

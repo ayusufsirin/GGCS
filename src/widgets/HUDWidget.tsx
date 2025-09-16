@@ -1,5 +1,5 @@
 import React from "react";
-import { useAttr } from "../middleware/widget-attr";
+import { useAttr } from "../middleware/hooks/use-attr";
 import DroneHud from "react-drone-hud";
 
 // Reusable hook to track an element's rendered size

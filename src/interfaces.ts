@@ -9,11 +9,20 @@ export interface Topic {
   type: string;
 }
 
+export interface Service {
+  name: string;
+  type: string
+}
+
+// TODO: Make fields depend on type
 export interface Value {
   label: string;
-  type: "topic";
-  topic: Topic;
-  topicField: string;
+  type: "topic" | "service";
+  // topic interface fields
+  topic?: Topic;
+  topicField?: string;
+  // service interface fields
+  service?: Service;
 }
 
 export interface Widget {
