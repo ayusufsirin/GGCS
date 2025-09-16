@@ -1,25 +1,3 @@
-// middleware/config-scan.ts
-import type { Service, Topic } from "../interfaces";
-
-export type TopicBinding = {
-  instanceId: string; // unique path to this widget instance
-  attrName: string;   // e.g. "speed" | "latitude"
-  topic: Topic;       // { name, type }
-  topicField: string; // e.g. ".data" or ".latitude"
-};
-
-export type ServiceBinding = {
-  instanceId: string; // widget instance path
-  attrName: string;   // attribute name the widget will call (e.g., "reset")
-  service: Service;   // { name, type }
-};
-
-export type ConstantBinding = {
-  instanceId: string; // widget instance path
-  attrName: string;   // attribute name (e.g., "title")
-  value: unknown;     // literal value taken from config
-};
-
 // ---------- utils ----------
 function makeInstanceId(path: string[]) {
   return path.join(".");
@@ -89,44 +67,4 @@ export function collectBindings<TBinding>(
   });
 
   return out;
-}
-
-// ---------- specializations ----------
-export function collectTopicBindings(config: unknown): TopicBinding[] {
-  return collectBindings<TopicBinding>(
-    config,
-    // match
-    (e) => e.type === "topic" && isObject(e.topic) && typeof e.topicField === "string",
-    // map
-    ({instanceId, attrName, entry}) => {
-      const topic = entry.topic as Topic;
-      const topicField = String(entry.topicField);
-      return {instanceId, attrName, topic, topicField};
-    }
-  );
-}
-
-export function collectServiceBindings(config: unknown): ServiceBinding[] {
-  return collectBindings<ServiceBinding>(
-    config,
-    // match
-    (e) => e.type === "service" && isObject(e.service),
-    // map
-    ({instanceId, attrName, entry}) => {
-      const service = entry.service as Service;
-      return {instanceId, attrName, service};
-    }
-  );
-}
-
-export function collectConstantBindings(config: unknown): ConstantBinding[] {
-  return collectBindings<ConstantBinding>(
-    config,
-    // match
-    (e) => e.type === "constant" && "constant" in e,
-    // map
-    ({instanceId, attrName, entry}) => {
-      return { instanceId, attrName, value: (entry as any).constant };
-    }
-  );
 }
