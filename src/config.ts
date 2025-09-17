@@ -229,7 +229,18 @@ export const config: Entity = {
       },
       settings: {
         label: "Settings",
-        widget: { name: "settings", config: {} }
+        widget: {
+          name: "settings", config: {
+            setParams: {
+              type: "service",
+              service: {name: "/reset_service_node/set_parameters", type: "rcl_interfaces/srv/SetParameters"}
+            },
+            getParams: {
+              type: "service",
+              service: {name: "/reset_service_node/get_parameters", type: "rcl_interfaces/srv/GetParameters"}
+            },
+          }
+        }
       },
     }
   }
