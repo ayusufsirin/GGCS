@@ -217,6 +217,25 @@ function GridView({
   );
 }
 
+// ---------- Copyright bar ----------
+function CopyrightBar({ owner, email }: { owner: string, email: string }) {
+  const year = new Date().getFullYear();
+  return (
+    <div
+      style={{
+        padding: "8px 12px",
+        borderTop: "1px solid rgba(255,255,255,0.12)",
+        background: "rgba(0,0,0,0.25)",
+        fontSize: 12,
+        textAlign: "center",
+      }}
+      aria-label="copyright"
+    >
+      © {year} {owner} | {email}. All rights reserved.
+    </div>
+  );
+}
+
 // ---------- Top-level dashboard ----------
 export function Dashboard() {
   // Bind once for the whole config (scanner already recursive)
@@ -230,6 +249,10 @@ export function Dashboard() {
       <div style={{ flex: 1, minHeight: 0 }}>
         <RenderNode node={root as AnyNode} path={[]} />
       </div>
+      <CopyrightBar
+        owner="Ahmet Yusuf Şirin"
+        email="ayusufsirin@gmail.com"
+      />
     </div>
   );
 }
