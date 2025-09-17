@@ -124,6 +124,7 @@ export function MapWidget() {
       scrollWheelZoom
     >
       <LayersControl position="topright">
+        <MapFollow lat={lat} lon={lon} />
         <LayersControl.BaseLayer checked name="Street">
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" maxZoom={maxZoom} />
         </LayersControl.BaseLayer>
@@ -185,4 +186,16 @@ export function MapWidget() {
       )}
     </MapContainer>
   );
+}
+
+function MapFollow({ lat, lon }: { lat?: number | null; lon?: number | null }) {
+  const { useMapAutofocus } = require("./hooks/map/use-map-autofocus") as typeof import("./hooks/map/use-map-autofocus");
+  useMapAutofocus(lat ?? undefined, lon ?? undefined, {
+    enabled: true,
+    mode: "pan",        // "fly" for smooth flight, "set" for immediate setView
+    debounceMs: 150,    // small debounce to smooth GPS jitter
+    keepZoom: true,     // keep current zoom while following
+    minMoveMeters: 0    // set >0 to ignore tiny jitter
+  });
+  return null;
 }
