@@ -14,23 +14,40 @@ export interface Service {
   type: string
 }
 
-// TODO: Make fields depend on type
-export interface Value {
-  type: "topic" | "service" | "constant";
-  // topic interface fields
-  topic?: Topic;
-  topicField?: string;
-  // service interface fields
-  service?: Service;
-  // constant interface fields
-  constant?: unknown;
+export const ValueTypes = {
+  subscriber: "subscriber",
+  service: "service",
+  constant: "constant",
+  publisher: "publisher",
+} as const;
+
+// Discriminated union for config values
+export interface SubscriberValue {
+  type: typeof ValueTypes.subscriber;
+  topic: Topic;
+  topicField: string;
 }
+
+export interface ServiceValue {
+  type: typeof ValueTypes.service;
+  service: Service;
+}
+
+export interface ConstantValue {
+  type: typeof ValueTypes.constant;
+  constant: unknown;
+}
+
+export interface PublisherValue {
+  type: typeof ValueTypes.publisher;
+  topic: Topic;
+}
+
+export type Value = SubscriberValue | ServiceValue | ConstantValue | PublisherValue;
 
 export interface Widget {
   name: string;
-  config: {
-    [id: string]: Value;
-  }
+  config: Record<string, Value>;
 }
 
 export interface Tab extends Entity {

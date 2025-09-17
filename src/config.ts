@@ -39,27 +39,27 @@ const hudWidget: Widget = {
   name: "hud",
   config: {
     roll: {
-      type: "topic",
+      type: "subscriber",
       topic: rollTopic,
       topicField: ".data"
     },
     pitch: {
-      type: "topic",
+      type: "subscriber",
       topic: pitchTopic,
       topicField: ".data"
     },
     heading: {
-      type: "topic",
+      type: "subscriber",
       topic: headingTopic,
       topicField: ".data"
     },
     speed: {
-      type: "topic",
+      type: "subscriber",
       topic: speedTopic,
       topicField: ".data"
     },
     altitude: {
-      type: "topic",
+      type: "subscriber",
       topic: altitudeTopic,
       topicField: ".data"
     }
@@ -70,17 +70,17 @@ const mapWidget: Widget = {
   name: "map",
   config: {
     latitude: {
-      type: "topic",
+      type: "subscriber",
       topic: gpsTopic,
       topicField: ".latitude"
     },
     longitude: {
-      type: "topic",
+      type: "subscriber",
       topic: gpsTopic,
       topicField: ".longitude"
     },
     heading: {
-      type: "topic",
+      type: "subscriber",
       topic: headingTopic,
       topicField: ".data"
     }
@@ -91,7 +91,7 @@ const speedGaugeWidget: Widget = {
   name: "gauge",
   config: {
     value: {
-      type: "topic",
+      type: "subscriber",
       topic: speedTopic,
       topicField: ".data"
     },
@@ -106,7 +106,7 @@ const accelGaugeWidget: Widget = {
   name: "gauge",
   config: {
     value: {
-      type: "topic",
+      type: "subscriber",
       topic: accelTopic,
       topicField: ".data"
     },
@@ -155,7 +155,7 @@ export const config: Entity = {
                     widget: {
                       name: "sample", config: {
                         speed: {
-                          type: "topic",
+                          type: "subscriber",
                           topic: speedTopic,
                           topicField: ".data"
                         },
@@ -166,6 +166,13 @@ export const config: Entity = {
                         reset: {
                           type: "service",
                           service: {name: "/reset", type: "std_srvs/srv/Trigger"}
+                        },
+                        setSpeed: {
+                          type: "publisher",
+                          topic: {
+                            name: "/target_speed",
+                            type: "std_msgs/msg/Float64"
+                          }
                         }
                       }
                     }

@@ -1,9 +1,9 @@
 import { collectBindings, isObject } from "../config-scan";
 import { sharedTopics } from "../roslib/shared-topic";
 import { instanceStore } from "../instance-store";
-import type { Topic } from "../../interfaces";
+import { Topic, ValueTypes } from "../../interfaces";
 
-export type TopicBinding = {
+export type SubscriberBinding = {
   instanceId: string; // unique path to this widget instance
   attrName: string;   // e.g. "speed" | "latitude"
   topic: Topic;       // { name, type }
@@ -20,9 +20,9 @@ function getByPath(obj: any, dotPath: string) {
   return cur;
 }
 
-export function attachTopicBindings(bindings?: TopicBinding[]) {
-  const list = bindings ?? collectTopicBindings((globalThis as any).config);
-  const byTopic = new Map<string, TopicBinding[]>();
+export function attachSubscriberBindings(bindings?: SubscriberBinding[]) {
+  const list = bindings ?? collectSubscriberBindings((globalThis as any).config);
+  const byTopic = new Map<string, SubscriberBinding[]>();
 
   for (const b of list) {
     const k = `${b.topic.name}|${b.topic.type}`;
@@ -48,16 +48,16 @@ export function attachTopicBindings(bindings?: TopicBinding[]) {
   return () => offs.forEach((f) => f());
 }
 
-export function collectTopicBindings(config: unknown): TopicBinding[] {
-  return collectBindings<TopicBinding>(
+export function collectSubscriberBindings(config: unknown): SubscriberBinding[] {
+  return collectBindings<SubscriberBinding>(
     config,
     // match
-    (e) => e.type === "topic" && isObject(e.topic) && typeof e.topicField === "string",
+    (e) => e.type === ValueTypes.subscriber && isObject(e.topic) && typeof e.topicField === "string",
     // map
-    ({instanceId, attrName, entry}) => {
+    ({ instanceId, attrName, entry }) => {
       const topic = entry.topic as Topic;
       const topicField = String(entry.topicField);
-      return {instanceId, attrName, topic, topicField};
+      return { instanceId, attrName, topic, topicField };
     }
   );
 }
