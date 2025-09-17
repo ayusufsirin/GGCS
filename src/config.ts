@@ -83,6 +83,10 @@ const mapWidget: Widget = {
       type: "topic",
       topic: headingTopic,
       topicField: ".data"
+    },
+    initialZoom: {
+      type: "constant",
+      constant: 10
     }
   }
 };
