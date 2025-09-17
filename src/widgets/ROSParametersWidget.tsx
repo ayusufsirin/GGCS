@@ -12,13 +12,16 @@ type ParamRow = {
 const LS_KEY = "paramDefaults";
 
 export function ROSParametersWidget() {
-  // Middleware-bound rosapi services (configure in widget config)
   const listNodesSvc = useServiceCall<{}, { nodes: string[] }>("listNodes");
   const getParamNamesSvc = useServiceCall<{}, { names: string[] }>("getParamNames");
   const getParamSvc = useServiceCall<{ name: string }, { value: string }>("getParam");
-  const setParamSvc = useServiceCall<{ name: string; value: string }, { }> ("setParam");
+  const setParamSvc = useServiceCall<{ name: string; value: string }, {}>("setParam");
 
-  const [loading, setLoading] = useState(false);
+  // ---- State ----
+  const [loadingNodes, setLoadingNodes] = useState(false);
+  const [loadingParams, setLoadingParams] = useState(false);
+  const [saving, setSaving] = useState<Record<string, boolean>>({});
+
   const [nodes, setNodes] = useState<string[]>([]);
   const [nodesError, setNodesError] = useState<string | undefined>();
   const [selectedNode, setSelectedNode] = useState<string>("");
@@ -51,7 +54,7 @@ export function ROSParametersWidget() {
   }, []);
 
   const loadNodes = useCallback(async () => {
-    setLoading(true);
+    setLoadingNodes(true);
     setNodesError(undefined);
     try {
       const res = await listNodesSvc.call({}, { timeoutMs: 10000 });
@@ -60,16 +63,19 @@ export function ROSParametersWidget() {
     } catch (e: any) {
       setNodesError(String(e?.message ?? e));
     } finally {
-      setLoading(false);
+      setLoadingNodes(false);
     }
-  }, [listNodesSvc]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
+  // Run once on mount
   useEffect(() => {
     void loadNodes();
-  }, [loadNodes]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const loadParams = useCallback(async () => {
-    setLoading(true);
+    setLoadingParams(true);
     try {
       const namesResp = await getParamNamesSvc.call({}, { timeoutMs: 15000 });
       const allNames = namesResp?.names ?? [];
@@ -77,43 +83,43 @@ export function ROSParametersWidget() {
         ? allNames.filter((n) => n.startsWith(selectedNode))
         : allNames;
 
-      // fetch all values in parallel (mirrors rosparam.html behavior calling per param)
       const defaultsMap = readDefaults();
+
+      // Fetch all current values in parallel, but don't toggle global loading per item
       const values = await Promise.all(
         filtered.map(async (name) => {
           try {
             const res = await getParamSvc.call({ name }, { timeoutMs: 8000 });
             const cur = String(res?.value ?? "");
             const def = defaultsMap[name] !== undefined ? defaultsMap[name] : cur;
-            // If not stored yet, store current as default
             if (defaultsMap[name] === undefined) defaultsMap[name] = cur;
             return { name, currentValue: cur, defaultValue: def, editValue: cur } as ParamRow;
           } catch {
-            // On error, still return a row with empty values
             const def = defaultsMap[name] ?? "";
             return { name, currentValue: "", defaultValue: def, editValue: "" } as ParamRow;
           }
         })
       );
 
-      // Persist any newly written defaults
       writeDefaults(defaultsMap);
       setRows(values);
     } finally {
-      setLoading(false);
+      setLoadingParams(false);
     }
   }, [getParamNamesSvc, getParamSvc, readDefaults, writeDefaults, selectedNode]);
 
   const saveParam = useCallback(async (name: string, newValue: string) => {
-    setLoading(true);
+    setSaving((s) => ({ ...s, [name]: true }));
     try {
       await setParamSvc.call({ name, value: newValue }, { timeoutMs: 10000 });
-      // Update current value in table to reflect saved value
       setRows((prev) =>
         prev.map((r) => (r.name === name ? { ...r, currentValue: newValue } : r))
       );
     } finally {
-      setLoading(false);
+      setSaving((s) => {
+        const { [name]: _drop, ...rest } = s;
+        return rest;
+      });
     }
   }, [setParamSvc]);
 
@@ -140,13 +146,15 @@ export function ROSParametersWidget() {
           ))}
         </select>
 
-        <button disabled={loading} onClick={() => void loadNodes()}>
-          {loading ? "Loading…" : "Load Nodes"}
+        <button disabled={loadingNodes} onClick={() => void loadNodes()}>
+          {loadingNodes ? "Loading…" : "Load Nodes"}
         </button>
-        <button disabled={loading} onClick={() => void loadParams()}>
-          {loading ? "Loading…" : "Load Params"}
+        <button disabled={loadingParams} onClick={() => void loadParams()}>
+          {loadingParams ? "Loading…" : "Load Params"}
         </button>
-        <button disabled={loading} onClick={() => { clearDefaults(); /* keep UI; user can reload */ }}>
+        <button onClick={() => {
+          clearDefaults(); /* keep UI; user can reload */
+        }}>
           Clear Defaults
         </button>
 
@@ -163,7 +171,7 @@ export function ROSParametersWidget() {
       {nodesError && <div style={{ color: "red" }}>Error: {nodesError}</div>}
 
       <div style={{ position: "relative", flex: 1, overflow: "auto" }}>
-        {loading && (
+        {(loadingNodes || loadingParams) && (
           <div style={{
             position: "absolute", left: "50%", top: "50%",
             transform: "translate(-50%, -50%)",
@@ -171,7 +179,7 @@ export function ROSParametersWidget() {
             borderTop: "4px solid #3498db",
             borderRadius: "50%",
             width: 40, height: 40, animation: "spin 1s linear infinite"
-          }}/>
+          }} />
         )}
 
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -188,6 +196,7 @@ export function ROSParametersWidget() {
           <tbody>
           {visibleRows.map((r) => {
             const isModified = modified(r);
+            const isSaving = saving[r.name];
             return (
               <tr key={r.name} style={{ backgroundColor: isModified ? "#ffd70055" : "transparent" }}>
                 <td style={tdStyle}><code>{r.name}</code></td>
@@ -207,16 +216,16 @@ export function ROSParametersWidget() {
                 <td style={tdStyle}>{isModified ? "Yes" : "No"}</td>
                 <td style={tdStyle}>
                   <button
-                    disabled={loading}
+                    disabled={isSaving}
                     onClick={() => void saveParam(r.name, r.editValue)}
                   >
-                    Save
+                    {isSaving ? "Saving…" : "Save"}
                   </button>
                 </td>
               </tr>
             );
           })}
-          {!loading && visibleRows.length === 0 && (
+          {!loadingParams && visibleRows.length === 0 && (
             <tr>
               <td colSpan={6} style={{ ...tdStyle, textAlign: "center", color: "#666" }}>
                 No parameters to display
