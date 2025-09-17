@@ -236,6 +236,30 @@ export const config: Entity = {
           }
         }
       },
+      rosParameters: {
+        label: "ROS Parameters",
+        widget: {
+          name: "rosParameters",
+          config: {
+            listNodes: {
+              type: "service",
+              service: { name: "/rosapi/nodes", type: "rosapi/Nodes" }
+            },
+            getParamNames: {
+              type: "service",
+              service: { name: "/rosapi/get_param_names", type: "rosapi/GetParamNames" }
+            },
+            getParam: {
+              type: "service",
+              service: { name: "/rosapi/get_param", type: "rosapi/GetParam" }
+            },
+            setParam: {
+              type: "service",
+              service: { name: "/rosapi/set_param", type: "rosapi/SetParam" }
+            }
+          }
+        }
+      }
     }
   }
 };
