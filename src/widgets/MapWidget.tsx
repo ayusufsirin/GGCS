@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css"; // Ensure Leaflet CSS is loaded
-import { Circle, LayersControl, MapContainer, Marker, Polyline, TileLayer } from "react-leaflet";
+import { Circle, LayersControl, MapContainer, Marker, Polyline, TileLayer, useMap } from "react-leaflet";
 import L, { DivIcon, LatLngExpression, Marker as LeafletMarker } from "leaflet";
 import "leaflet-rotatedmarker"; // extends Leaflet's Marker with rotation
 import { useAttr } from "../middleware/hooks/use-attr";
@@ -123,6 +123,7 @@ export function MapWidget() {
       style={{ width: "100%", height: "100%" }}
       scrollWheelZoom
     >
+      <MapInitialZoom zoom={initialZoom} />
       <LayersControl position="topright">
         <MapFollow lat={lat} lon={lon} />
         <LayersControl.BaseLayer checked name="Street">
@@ -197,5 +198,15 @@ function MapFollow({ lat, lon }: { lat?: number | null; lon?: number | null }) {
     keepZoom: true,     // keep current zoom while following
     minMoveMeters: 0    // set >0 to ignore tiny jitter
   });
+  return null;
+}
+
+function MapInitialZoom({ zoom }: { zoom?: number | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (zoom == null || !Number.isFinite(zoom)) return;
+    // Preserve current center; just apply the zoom once attr is available/changes
+    map.setZoom(zoom as number, { animate: false });
+  }, [zoom, map]);
   return null;
 }
