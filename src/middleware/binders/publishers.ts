@@ -8,7 +8,23 @@ export type PublisherBinding = {
   instanceId: string;
   attrName: string;
   topic: Topic;
+  topicField?: string;        // optional dot-path like ".data"
 };
+
+function setByPath(target: any, dotPath: string, value: any) {
+  const parts = dotPath.replace(/^\./, "").split(".").filter(Boolean);
+  let cur = target;
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
+    const isLast = i === parts.length - 1;
+    if (isLast) {
+      cur[p] = value;
+    } else {
+      cur[p] = cur[p] ?? {};
+      cur = cur[p];
+    }
+  }
+}
 
 export function collectPublisherBindings(config: unknown): PublisherBinding[] {
   return collectBindings<PublisherBinding>(
@@ -16,7 +32,8 @@ export function collectPublisherBindings(config: unknown): PublisherBinding[] {
     (e) => e.type === ValueTypes.publisher && isObject(e.topic),
     ({ instanceId, attrName, entry }) => {
       const topic = entry.topic as Topic;
-      return { instanceId, attrName, topic };
+      const topicField = typeof (entry as any).topicField === "string" ? String((entry as any).topicField) : undefined;
+      return { instanceId, attrName, topic, topicField };
     }
   );
 }
@@ -27,13 +44,36 @@ export function attachPublisherBindings(bindings?: PublisherBinding[]) {
   const disposers: Array<() => void> = [];
 
   for (const b of list) {
-    console.log("attachPublisherBindings", b);
     const pub = sharedTopics.getPublisher({ name: b.topic.name, type: b.topic.type });
-    const unregister = publisherBus.register(b.instanceId, b.attrName, (msg: any) => {
+
+    // Expose function: accepts primitive or full message.
+    const unregister = publisherBus.register(b.instanceId, b.attrName, (input: any) => {
       try {
+        let msg: any = input;
+        if (b.topicField) {
+          if (input !== null && typeof input === "object") {
+            // If field missing, set it with the whole input (common case: user passes primitive -> not here)
+            const parts = b.topicField.replace(/^\./, "").split(".").filter(Boolean);
+            let cur = msg, missing = false;
+            for (let i = 0; i < parts.length; i++) {
+              const p = parts[i];
+              const isLast = i === parts.length - 1;
+              if (!(p in cur)) {
+                missing = true;
+                if (!isLast) cur[p] = {};
+              }
+              if (isLast) break;
+              cur = cur[p];
+            }
+            if (missing) setByPath(msg, b.topicField, input);
+          } else {
+            // Primitive or non-object: wrap into an object via topicField
+            msg = {};
+            setByPath(msg, b.topicField, input);
+          }
+        }
         pub.publish(msg);
-      } catch {
-      }
+      } catch {}
     });
 
     disposers.push(() => {

@@ -41,6 +41,7 @@ export interface ConstantValue {
 export interface PublisherValue {
   type: typeof ValueTypes.publisher;
   topic: Topic;
+  topicField?: string;
 }
 
 export type Value = SubscriberValue | ServiceValue | ConstantValue | PublisherValue;
