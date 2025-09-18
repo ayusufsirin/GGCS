@@ -73,6 +73,9 @@ const hudWidget: Widget = {
 
 const mapWidget: Widget = {
   name: "map",
+  props: {
+    initialZoom: 10
+  },
   config: {
     latitude: {
       type: "subscriber",
@@ -88,10 +91,6 @@ const mapWidget: Widget = {
       type: "subscriber",
       topic: headingTopic,
       topicField: ".data"
-    },
-    initialZoom: {
-      type: "constant",
-      constant: 10
     }
   }
 };
