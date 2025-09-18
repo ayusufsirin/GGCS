@@ -20,6 +20,11 @@ const speedTopic: Topic = {
   type: "std_msgs/msg/Float64"
 };
 
+const targetSpeedTopic: Topic = {
+  name: "/target_speed",
+  type: "std_msgs/msg/Float64"
+}
+
 const altitudeTopic: Topic = {
   name: "/altitude",
   type: "std_msgs/msg/Float64"
@@ -169,10 +174,12 @@ export const config: Entity = {
                         },
                         setSpeed: {
                           type: "publisher",
-                          topic: {
-                            name: "/target_speed",
-                            type: "std_msgs/msg/Float64"
-                          }
+                          topic: targetSpeedTopic,
+                        },
+                        targetSpeed: {
+                          type: "subscriber",
+                          topic: targetSpeedTopic,
+                          topicField: ".data"
                         }
                       }
                     }

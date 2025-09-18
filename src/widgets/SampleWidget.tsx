@@ -5,6 +5,7 @@ import { usePublisher } from "../middleware/hooks/use-publisher";
 
 export function SampleWidget() {
   const speed = useAttr<number>("speed");
+  const targetSpeedLoopback = useAttr<number>("targetSpeed");
   const speedLabel = useAttr<string>("speedLabel");
   const { call: reset, pending: rPending } =
     useServiceCall<{}, { success: boolean; message: string }>("reset");
@@ -37,5 +38,6 @@ export function SampleWidget() {
           <button onClick={publishSpeed}>Publish</button>
         </div>
       </div>
+      <div>Target Speed: {targetSpeedLoopback ?? "—"}</div>
     </div>)
 }
