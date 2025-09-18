@@ -56,7 +56,7 @@ function TabsView({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
-      <div style={{ display: "flex", gap: 8, padding: 8, borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+      <div style={{ display: "flex", gap: 8, padding: 8 }}>
         {keys.map((k) => {
           const label = tabs[k]?.label ?? k;
           const isActive = k === active;
@@ -67,14 +67,27 @@ function TabsView({
               style={{
                 padding: "8px 12px",
                 borderRadius: 8,
-                border: "1px solid rgba(255,255,255,0.15)",
-                background: isActive ? "rgba(255,255,255,0.12)" : "transparent",
+                border: "1px solid transparent",
+                background: "transparent",
                 color: "inherit",
                 cursor: "pointer",
+                outline: "none",
               }}
               title={label}
             >
               {label}
+              {isActive && (
+                <span
+                  style={{
+                    display: "block",
+                    height: 2,
+                    background: "linear-gradient(90deg, #4fb3ff, #00e1ff)",
+                    borderRadius: 2,
+                    marginTop: 6,
+                    boxShadow: "0 0 8px rgba(0,225,255,0.35)",
+                  }}
+                />
+              )}
             </button>
           );
         })}
@@ -127,11 +140,6 @@ function GridView({
         gridAutoRows: "minmax(0, 1fr)",
         gap: 8,
         minHeight: 0,
-        // optional faint gridlines without affecting layout:
-        backgroundImage: `
-          linear-gradient(to right, rgba(255,255,255,0.08) 1px, transparent 1px),
-          linear-gradient(to bottom, rgba(255,255,255,0.08) 1px, transparent 1px)
-        `,
         backgroundSize: `calc(100% / ${cols}) 100%, 100% calc(100% / ${rows})`,
         backgroundPosition: "0 0, 0 0",
         backgroundRepeat: "repeat",
@@ -169,14 +177,12 @@ function GridView({
             style={{
               gridColumn: `${x + 1} / span ${w}`,
               gridRow: `${y + 1} / span ${h}`,
-              boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.12)",
-              borderRadius: 8,
-              padding: 8,
               height: "100%",
               display: "flex",
               flexDirection: "column",
               minHeight: 0,
               overflow: "hidden",
+              boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.10), 0 2px 6px rgba(0,0,0,0.25)",
             }}
             title={item.label ?? itemKey}
           >
