@@ -182,29 +182,63 @@ export const config: Entity = {
                       }
                     }
                   },
-                  actuator: {
-                    label: "Actuator",
-                    widget: {
-                      props: { label: "Servo Angle", units: "deg" },
-                      name: "actuator",
-                      config: {
-                        min: { type: "constant", constant: -20 },
-                        max: { type: "constant", constant: 20 },
-                        setSpeed: {
-                          type: "publisher",
-                          topic: targetSpeedTopic,
-                        },
-                        feedback: {
-                          type: "subscriber",
-                          topic: speedTopic,
-                          topicField: ".data"
-                        }
-                      }
-                    }
-                  },
                   actions: {
                     label: "Actions",
-                    widget: { name: "action", config: {} }
+                    grids: {
+                      horizontal: 1,
+                      vertical: 2,
+                      items: {
+                        actuator1: {
+                          height: 1,
+                          width: 1,
+                          x: 0,
+                          y: 0,
+                          label: "Actuator",
+                          widget: {
+                            props: { label: "Servo Angle", units: "deg" },
+                            name: "actuator",
+                            config: {
+                              min: { type: "constant", constant: -20 },
+                              max: { type: "constant", constant: 20 },
+                              setSpeed: {
+                                type: "publisher",
+                                topic: targetSpeedTopic,
+                              },
+                              feedback: {
+                                type: "subscriber",
+                                topic: speedTopic,
+                                topicField: ".data"
+                              }
+                            }
+                          }
+                        },
+                        actuator2: {
+                          height: 1,
+                          width: 1,
+                          x: 0,
+                          y: 1,
+                          label: "Actuator",
+                          widget: {
+                            props: { label: "Servo Angle", units: "deg" },
+                            name: "actuator",
+                            config: {
+                              min: { type: "constant", constant: -20 },
+                              max: { type: "constant", constant: 20 },
+                              decimal: { type: "constant", constant: 3 },
+                              setSpeed: {
+                                type: "publisher",
+                                topic: targetSpeedTopic,
+                              },
+                              feedback: {
+                                type: "subscriber",
+                                topic: speedTopic,
+                                topicField: ".data"
+                              }
+                            }
+                          }
+                        },
+                      }
+                    }
                   },
                   healthCheck: {
                     label: "Health Check",
