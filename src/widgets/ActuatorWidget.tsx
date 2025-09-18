@@ -12,6 +12,7 @@ export function ActuatorWidget({ label = "Actuator", units = "" }: Props) {
   // Constants (from config) for slider bounds
   const min = useAttr<number>("min") ?? 0;
   const max = useAttr<number>("max") ?? 100;
+  const decimal = useAttr<number>("decimal") ?? 0;
 
   // Feedback (subscriber) for actual position
   const feedback = useAttr<number>("feedback");
@@ -282,7 +283,7 @@ export function ActuatorWidget({ label = "Actuator", units = "" }: Props) {
       {/* Readout */}
       <div style={readoutRow}>
         <div style={{ fontSize: 14 }}>
-          Target: <b>{Number.isFinite(value) ? value : "—"}</b>
+          Target: <b>{Number.isFinite(value) ? value.toFixed(decimal) : "—"}</b>
           {units ? ` ${units}` : ""}
         </div>
         {!periodic && (
