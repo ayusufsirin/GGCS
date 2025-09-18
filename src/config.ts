@@ -158,7 +158,7 @@ export const config: Entity = {
                   sampleWidget: {
                     label: "Sample Widget",
                     widget: {
-                      props:{
+                      props: {
                         speedLabel: "Sample Speed (m/s)",
                       },
                       name: "sample", config: {
@@ -173,7 +173,7 @@ export const config: Entity = {
                         },
                         reset: {
                           type: "service",
-                          service: {name: "/reset", type: "std_srvs/srv/Trigger"}
+                          service: { name: "/reset", type: "std_srvs/srv/Trigger" }
                         },
                         setSpeed: {
                           type: "publisher",
@@ -188,13 +188,33 @@ export const config: Entity = {
                       }
                     }
                   },
+                  actuator: {
+                    label: "Actuator",
+                    widget: {
+                      props: { label: "Servo Angle", units: "deg" },
+                      name: "actuator",
+                      config: {
+                        min: { type: "constant", constant: -20 },
+                        max: { type: "constant", constant: 20 },
+                        setSpeed: {
+                          type: "publisher",
+                          topic: targetSpeedTopic,
+                        },
+                        feedback: {
+                          type: "subscriber",
+                          topic: speedTopic,
+                          topicField: ".data"
+                        }
+                      }
+                    }
+                  },
                   actions: {
                     label: "Actions",
-                    widget: {name: "action", config: {}}
+                    widget: { name: "action", config: {} }
                   },
                   healthCheck: {
                     label: "Health Check",
-                    widget: {name: "action", config: {}}
+                    widget: { name: "action", config: {} }
                   },
                   gauges: {
                     label: "Gauges",

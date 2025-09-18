@@ -3,10 +3,12 @@ import React from "react";
 import { HUDWidget } from "./HUDWidget";
 import { MapWidget } from "./MapWidget";
 import { SampleWidget } from "./SampleWidget";
+import { ActuatorWidget } from "./ActuatorWidget";
 
 export const WIDGETS: Record<string, React.ComponentType<any>> = {
   hud: HUDWidget,
   map: MapWidget,
   sample: SampleWidget,
   // settings: SettingsWidget, // <-- add if you have it
+  actuator: ActuatorWidget,
 };
