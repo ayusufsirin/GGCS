@@ -62,17 +62,5 @@ docker exec -it ggcs-rosbridge /bin/bash -c \
 ```bash
 docker exec -it ggcs-rosbridge /bin/bash -c \
   'source /opt/ros/humble/setup.bash && \
-   ros2 topic pub /roll std_msgs/msg/Float64 "{data: 30.0}"'
-```
-
-```bash
-docker exec -it ggcs-rosbridge /bin/bash -c \
-  'source /opt/ros/humble/setup.bash && \
-   ros2 topic pub /pitch std_msgs/msg/Float64 "{data: 30.0}"'
-```
-
-```bash
-docker exec -it ggcs-rosbridge /bin/bash -c \
-  'source /opt/ros/humble/setup.bash && \
-   ros2 topic pub /gps sensor_msgs/msg/NavSatFix "{latitude: 36.000, longitude: 42.000, altitude: 10.5}"'
+   ros2 topic pub /gps sensor_msgs/msg/NavSatFix "{latitude: 21.422487, longitude: 39.826206}"'
 ```

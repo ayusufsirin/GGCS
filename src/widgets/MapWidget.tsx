@@ -2,25 +2,15 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css"; // Ensure Leaflet CSS is loaded
 import { Circle, LayersControl, MapContainer, Marker, Polyline, TileLayer, useMap } from "react-leaflet";
 import L, { DivIcon, LatLngExpression, Marker as LeafletMarker } from "leaflet";
-import "leaflet-rotatedmarker"; // extends Leaflet's Marker with rotation
 import { useAttr } from "../middleware/hooks/use-attr";
 import homeIconUrl from "./images/map/home_icon.png";
 import vehicleIconUrl from "./images/map/vehicle_icon.png";
 
 // ---- Helpers ----
-const DEFAULT_CENTER: LatLngExpression = [39.87, 32.775];
+const DEFAULT_CENTER: LatLngExpression = [21.422487, 39.826206];
 const DEFAULT_ZOOM = 5;
 const DEFAULT_MAX_ZOOM = 50;
 const DEFAULT_PATH_LEN = 50_000;
-
-function calculateEndpoint(lat: number, lng: number, headingDeg: number, lengthMeters: number): [number, number] {
-  const R = 6_378_137; // Earth radius in meters
-  const delta = lengthMeters / R; // angular distance in radians
-  const theta = (headingDeg * Math.PI) / 180; // heading to radians
-  const endLat = lat + (delta * Math.cos(theta)) * (180 / Math.PI);
-  const endLng = lng + ((delta * Math.sin(theta)) * (180 / Math.PI)) / Math.cos((lat * Math.PI) / 180);
-  return [endLat, endLng];
-}
 
 // Build a DivIcon for waypoint labels (index shown)
 function waypointIcon(index: number): DivIcon {
@@ -32,7 +22,11 @@ function waypointIcon(index: number): DivIcon {
   });
 }
 
-export function MapWidget() {
+type Props = {
+  initialZoom: number
+}
+
+export function MapWidget({ initialZoom = DEFAULT_ZOOM }: Props) {
   // ---- Widget attributes ----
   const lat = useAttr<number>("latitude");      // degrees
   const lon = useAttr<number>("longitude");     // degrees
@@ -43,7 +37,6 @@ export function MapWidget() {
   const waypointsUrl = useAttr<string>("waypointsUrl") ?? "/waypoints";
   // const vehicleIconUrl = useAttr<string>("vehicleIconUrl") ?? "./images/map/vehicle_icon.png";
   // const homeIconUrl = useAttr<string>("homeIconUrl") ?? "./images/map/home_icon.png";
-  const initialZoom = useAttr<number>("initialZoom") ?? DEFAULT_ZOOM;
   const maxZoom = useAttr<number>("maxZoom") ?? DEFAULT_MAX_ZOOM;
   const maxPathLength = useAttr<number>("maxPathLength") ?? DEFAULT_PATH_LEN;
 
@@ -110,11 +103,6 @@ export function MapWidget() {
 
   // ---- Derived values ----
   const mapCenter = useMemo<LatLngExpression>(() => [centerLat, centerLon], [centerLat, centerLon]);
-  const endOfHeading = useMemo<[number, number] | null>(() => {
-    if (lat == null || lon == null) return null;
-    const hdg = Number.isFinite(heading as number) ? (heading as number) : 0;
-    return calculateEndpoint(lat, lon, hdg, 1000);
-  }, [lat, lon, heading]);
 
   return (
     <MapContainer
@@ -123,7 +111,6 @@ export function MapWidget() {
       style={{ width: "100%", height: "100%" }}
       scrollWheelZoom
     >
-      <MapInitialZoom zoom={initialZoom} />
       <LayersControl position="topright">
         <MapFollow lat={lat} lon={lon} />
         <LayersControl.BaseLayer checked name="Street">
@@ -176,9 +163,9 @@ export function MapWidget() {
         />
       )}
 
-      {/* Heading line (1 km) */}
-      {lat != null && lon != null && endOfHeading && (
-        <Polyline positions={[[lat, lon], endOfHeading]} pathOptions={{ color: "black", weight: 2 }} />
+      {/* Heading line from vehicle to edge of current map view */}
+      {lat != null && lon != null && (
+        <HeadingRay lat={lat} lon={lon} heading={heading} />
       )}
 
       {/* Path trail */}
@@ -201,12 +188,68 @@ function MapFollow({ lat, lon }: { lat?: number | null; lon?: number | null }) {
   return null;
 }
 
-function MapInitialZoom({ zoom }: { zoom?: number | null }) {
+// Draws a ray from the vehicle to the current map viewport edge along heading
+function HeadingRay({ lat, lon, heading }: { lat: number; lon: number; heading?: number | null }) {
   const map = useMap();
+  const [end, setEnd] = useState<[number, number] | null>(null);
+
   useEffect(() => {
-    if (zoom == null || !Number.isFinite(zoom)) return;
-    // Preserve current center; just apply the zoom once attr is available/changes
-    map.setZoom(zoom as number, { animate: false });
-  }, [zoom, map]);
-  return null;
+    if (lat == null || lon == null) return;
+
+    const compute = () => {
+      const size = map.getSize();
+      const w = size.x;
+      const h = size.y;
+
+      // Project vehicle position to pixel space
+      const p = map.project(L.latLng(lat, lon));
+
+      // Heading in radians, 0 = North, clockwise; convert to pixel-space vector (y grows down)
+      const hdg = Number.isFinite(heading as number) ? (heading as number) : 0;
+      const theta = (hdg * Math.PI) / 180;
+      const vx = Math.sin(theta);
+      const vy = -Math.cos(theta);
+
+      // If vector is zero (shouldn't happen), skip
+      if (Math.abs(vx) < 1e-9 && Math.abs(vy) < 1e-9) {
+        setEnd(null);
+        return;
+      }
+
+      // Compute t to each screen edge and pick the smallest positive
+      const ts: number[] = [];
+
+      if (vx > 0) ts.push((w - p.x) / vx);
+      else if (vx < 0) ts.push((0 - p.x) / vx);
+
+      if (vy > 0) ts.push((h - p.y) / vy);
+      else if (vy < 0) ts.push((0 - p.y) / vy);
+
+      const candidates = ts.filter((t) => t > 0 && Number.isFinite(t));
+      if (!candidates.length) {
+        setEnd(null);
+        return;
+      }
+      const t = Math.min(...candidates);
+
+      const endPoint = L.point(p.x + vx * t, p.y + vy * t);
+      const endLatLng = map.unproject(endPoint);
+      setEnd([endLatLng.lat, endLatLng.lng]);
+    };
+
+    // Compute immediately and on map changes
+    compute();
+    map.on("move", compute);
+    map.on("zoom", compute);
+    map.on("resize", compute);
+
+    return () => {
+      map.off("move", compute);
+      map.off("zoom", compute);
+      map.off("resize", compute);
+    };
+  }, [lat, lon, heading, map]);
+
+  if (!end) return null;
+  return <Polyline positions={[[lat, lon], end]} pathOptions={{ color: "black", weight: 2 }} />;
 }
