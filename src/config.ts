@@ -216,6 +216,7 @@ export const config: Entity = {
                         setSpeed: {
                           type: "publisher",
                           topic: targetSpeedTopic,
+                          topicField: ".data"
                         },
                         targetSpeed: {
                           type: "subscriber",
