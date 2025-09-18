@@ -74,7 +74,7 @@ const hudWidget: Widget = {
 const mapWidget: Widget = {
   name: "map",
   props: {
-    initialZoom: 10
+    initialZoom: 20
   },
   config: {
     latitude: {
