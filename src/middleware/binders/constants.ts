@@ -1,5 +1,6 @@
 import { collectBindings } from "../config-scan";
 import { instanceStore } from "../instance-store";
+import { ValueTypes } from "../../interfaces";
 
 export type ConstantBinding = {
   instanceId: string; // widget instance path
@@ -25,10 +26,10 @@ export function collectConstantBindings(config: unknown): ConstantBinding[] {
   return collectBindings<ConstantBinding>(
     config,
     // match
-    (e) => e.type === "constant" && "constant" in e,
+    (e) => e.type === ValueTypes.constant && ValueTypes.constant in e,
     // map
-    ({instanceId, attrName, entry}) => {
-      return {instanceId, attrName, value: (entry as any).constant};
+    ({ instanceId, attrName, entry }) => {
+      return { instanceId, attrName, value: (entry as any).constant };
     }
   );
 }

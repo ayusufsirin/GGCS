@@ -1,7 +1,7 @@
 import { collectBindings, isObject } from "../config-scan";
 import { sharedServices } from "../roslib/shared-service";
 import { serviceBus, svcKey } from "../service-bus";
-import type { Service } from "../../interfaces";
+import { Service, ValueTypes } from "../../interfaces";
 
 export type ServiceBinding = {
   instanceId: string; // widget instance path
@@ -27,11 +27,11 @@ export function collectServiceBindings(config: unknown): ServiceBinding[] {
   return collectBindings<ServiceBinding>(
     config,
     // match
-    (e) => e.type === "service" && isObject(e.service),
+    (e) => e.type === ValueTypes.service && isObject(e.service),
     // map
-    ({instanceId, attrName, entry}) => {
+    ({ instanceId, attrName, entry }) => {
       const service = entry.service as Service;
-      return {instanceId, attrName, service};
+      return { instanceId, attrName, service };
     }
   );
 }

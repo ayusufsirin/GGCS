@@ -20,10 +20,10 @@ const speedTopic: Topic = {
   type: "std_msgs/msg/Float64"
 };
 
-const altitudeTopic: Topic = {
-  name: "/altitude",
+const targetSpeedTopic: Topic = {
+  name: "/target_speed",
   type: "std_msgs/msg/Float64"
-};
+}
 
 const accelTopic: Topic = {
   name: "/accel",
@@ -39,29 +39,29 @@ const hudWidget: Widget = {
   name: "hud",
   config: {
     roll: {
-      type: "topic",
+      type: "subscriber",
       topic: rollTopic,
       topicField: ".data"
     },
     pitch: {
-      type: "topic",
+      type: "subscriber",
       topic: pitchTopic,
       topicField: ".data"
     },
     heading: {
-      type: "topic",
+      type: "subscriber",
       topic: headingTopic,
       topicField: ".data"
     },
     speed: {
-      type: "topic",
+      type: "subscriber",
       topic: speedTopic,
       topicField: ".data"
     },
     altitude: {
-      type: "topic",
-      topic: altitudeTopic,
-      topicField: ".data"
+      type: "subscriber",
+      topic: gpsTopic,
+      topicField: ".altitude"
     }
   }
 };
@@ -70,19 +70,23 @@ const mapWidget: Widget = {
   name: "map",
   config: {
     latitude: {
-      type: "topic",
+      type: "subscriber",
       topic: gpsTopic,
       topicField: ".latitude"
     },
     longitude: {
-      type: "topic",
+      type: "subscriber",
       topic: gpsTopic,
       topicField: ".longitude"
     },
     heading: {
-      type: "topic",
+      type: "subscriber",
       topic: headingTopic,
       topicField: ".data"
+    },
+    initialZoom: {
+      type: "constant",
+      constant: 10
     }
   }
 };
@@ -91,7 +95,7 @@ const speedGaugeWidget: Widget = {
   name: "gauge",
   config: {
     value: {
-      type: "topic",
+      type: "subscriber",
       topic: speedTopic,
       topicField: ".data"
     },
@@ -138,7 +142,7 @@ const accelGaugeWidget: Widget = {
   name: "gauge",
   config: {
     value: {
-      type: "topic",
+      type: "subscriber",
       topic: accelTopic,
       topicField: ".data"
     },
@@ -189,30 +193,96 @@ export const config: Entity = {
                   sampleWidget: {
                     label: "Sample Widget",
                     widget: {
+                      props: {
+                        speedLabel: "Sample Speed (m/s)",
+                      },
                       name: "sample", config: {
                         speed: {
-                          type: "topic",
+                          type: "subscriber",
                           topic: speedTopic,
                           topicField: ".data"
                         },
-                        speedLabel: {
+                        speedMultiplier: {
                           type: "constant",
-                          constant: "Speed (m/s)",
+                          constant: 0.1,
                         },
                         reset: {
                           type: "service",
-                          service: {name: "/reset", type: "std_srvs/srv/Trigger"}
+                          service: { name: "/reset", type: "std_srvs/srv/Trigger" }
+                        },
+                        setSpeed: {
+                          type: "publisher",
+                          topic: targetSpeedTopic,
+                        },
+                        targetSpeed: {
+                          type: "subscriber",
+                          topic: targetSpeedTopic,
+                          topicField: ".data"
                         }
                       }
                     }
                   },
                   actions: {
                     label: "Actions",
-                    widget: {name: "action", config: {}}
+                    grids: {
+                      horizontal: 1,
+                      vertical: 2,
+                      items: {
+                        actuator1: {
+                          height: 1,
+                          width: 1,
+                          x: 0,
+                          y: 0,
+                          label: "Actuator",
+                          widget: {
+                            props: { label: "Servo Angle", units: "deg" },
+                            name: "actuator",
+                            config: {
+                              min: { type: "constant", constant: -20 },
+                              max: { type: "constant", constant: 20 },
+                              setSpeed: {
+                                type: "publisher",
+                                topic: targetSpeedTopic,
+                              },
+                              feedback: {
+                                type: "subscriber",
+                                topic: speedTopic,
+                                topicField: ".data"
+                              }
+                            }
+                          }
+                        },
+                        actuator2: {
+                          height: 1,
+                          width: 1,
+                          x: 0,
+                          y: 1,
+                          label: "Actuator",
+                          widget: {
+                            props: { label: "Servo Angle", units: "deg" },
+                            name: "actuator",
+                            config: {
+                              min: { type: "constant", constant: -20 },
+                              max: { type: "constant", constant: 20 },
+                              decimal: { type: "constant", constant: 3 },
+                              setSpeed: {
+                                type: "publisher",
+                                topic: targetSpeedTopic,
+                              },
+                              feedback: {
+                                type: "subscriber",
+                                topic: speedTopic,
+                                topicField: ".data"
+                              }
+                            }
+                          }
+                        },
+                      }
+                    }
                   },
                   healthCheck: {
                     label: "Health Check",
-                    widget: {name: "action", config: {}}
+                    widget: { name: "action", config: {} }
                   },
                   gauges: {
                     label: "Gauges",
@@ -247,8 +317,43 @@ export const config: Entity = {
       },
       settings: {
         label: "Settings",
-        widget: { name: "settings", config: {} }
+        widget: {
+          name: "settings", config: {
+            setParams: {
+              type: "service",
+              service: {name: "/reset_service_node/set_parameters", type: "rcl_interfaces/srv/SetParameters"}
+            },
+            getParams: {
+              type: "service",
+              service: {name: "/reset_service_node/get_parameters", type: "rcl_interfaces/srv/GetParameters"}
+            },
+          }
+        }
       },
+      rosParameters: {
+        label: "ROS Parameters",
+        widget: {
+          name: "rosParameters",
+          config: {
+            listNodes: {
+              type: "service",
+              service: { name: "/rosapi/nodes", type: "rosapi/Nodes" }
+            },
+            getParamNames: {
+              type: "service",
+              service: { name: "/rosapi/get_param_names", type: "rosapi/GetParamNames" }
+            },
+            getParam: {
+              type: "service",
+              service: { name: "/rosapi/get_param", type: "rosapi/GetParam" }
+            },
+            setParam: {
+              type: "service",
+              service: { name: "/rosapi/set_param", type: "rosapi/SetParam" }
+            }
+          }
+        }
+      }
     }
   }
 };
