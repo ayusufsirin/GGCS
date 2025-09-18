@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css"; // Ensure Leaflet CSS is loaded
-import { Circle, LayersControl, MapContainer, Marker, Polyline, TileLayer, useMap } from "react-leaflet";
+import { Circle, LayersControl, MapContainer, Marker, Polyline, TileLayer } from "react-leaflet";
 import L, { DivIcon, LatLngExpression, Marker as LeafletMarker } from "leaflet";
 import "leaflet-rotatedmarker"; // extends Leaflet's Marker with rotation
 import { useAttr } from "../middleware/hooks/use-attr";
@@ -32,7 +32,11 @@ function waypointIcon(index: number): DivIcon {
   });
 }
 
-export function MapWidget() {
+type Props = {
+  initialZoom: number
+}
+
+export function MapWidget({ initialZoom = DEFAULT_ZOOM }: Props) {
   // ---- Widget attributes ----
   const lat = useAttr<number>("latitude");      // degrees
   const lon = useAttr<number>("longitude");     // degrees
@@ -43,7 +47,6 @@ export function MapWidget() {
   const waypointsUrl = useAttr<string>("waypointsUrl") ?? "/waypoints";
   // const vehicleIconUrl = useAttr<string>("vehicleIconUrl") ?? "./images/map/vehicle_icon.png";
   // const homeIconUrl = useAttr<string>("homeIconUrl") ?? "./images/map/home_icon.png";
-  const initialZoom = useAttr<number>("initialZoom") ?? DEFAULT_ZOOM;
   const maxZoom = useAttr<number>("maxZoom") ?? DEFAULT_MAX_ZOOM;
   const maxPathLength = useAttr<number>("maxPathLength") ?? DEFAULT_PATH_LEN;
 
@@ -123,7 +126,6 @@ export function MapWidget() {
       style={{ width: "100%", height: "100%" }}
       scrollWheelZoom
     >
-      <MapInitialZoom zoom={initialZoom} />
       <LayersControl position="topright">
         <MapFollow lat={lat} lon={lon} />
         <LayersControl.BaseLayer checked name="Street">
@@ -198,15 +200,5 @@ function MapFollow({ lat, lon }: { lat?: number | null; lon?: number | null }) {
     keepZoom: true,     // keep current zoom while following
     minMoveMeters: 0    // set >0 to ignore tiny jitter
   });
-  return null;
-}
-
-function MapInitialZoom({ zoom }: { zoom?: number | null }) {
-  const map = useMap();
-  useEffect(() => {
-    if (zoom == null || !Number.isFinite(zoom)) return;
-    // Preserve current center; just apply the zoom once attr is available/changes
-    map.setZoom(zoom as number, { animate: false });
-  }, [zoom, map]);
   return null;
 }
