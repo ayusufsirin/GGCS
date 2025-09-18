@@ -3,10 +3,16 @@ import { useAttr } from "../middleware/hooks/use-attr";
 import React, { useState } from "react";
 import { usePublisher } from "../middleware/hooks/use-publisher";
 
-export function SampleWidget() {
+type Props = {
+  speedLabel?: string;
+};
+
+export function SampleWidget({ speedLabel }: Props) {
+  console.log("SampleWidget", speedLabel);
+
   const speed = useAttr<number>("speed");
+  const speedMultiplier = useAttr<number>("speedMultiplier");
   const targetSpeedLoopback = useAttr<number>("targetSpeed");
-  const speedLabel = useAttr<string>("speedLabel");
   const { call: reset, pending: rPending } =
     useServiceCall<{}, { success: boolean; message: string }>("reset");
 
@@ -20,9 +26,15 @@ export function SampleWidget() {
     publishSetSpeed({ data: v });
   };
 
+  let _speed: string = "—";
+
+  if (speed !== undefined && speedMultiplier !== undefined) {
+    _speed = `${speed * speedMultiplier}`;
+  }
+
   return (
     <div>
-      <div>{speedLabel}: {speed ?? "—"}</div>
+      <div>{speedLabel}: {_speed}</div>
       <button disabled={rPending} onClick={() => reset({})}>
         {rPending ? "Resetting…" : "Reset"}
       </button>

@@ -158,15 +158,18 @@ export const config: Entity = {
                   sampleWidget: {
                     label: "Sample Widget",
                     widget: {
+                      props:{
+                        speedLabel: "Sample Speed (m/s)",
+                      },
                       name: "sample", config: {
                         speed: {
                           type: "subscriber",
                           topic: speedTopic,
                           topicField: ".data"
                         },
-                        speedLabel: {
+                        speedMultiplier: {
                           type: "constant",
-                          constant: "Speed (m/s)",
+                          constant: 0.1,
                         },
                         reset: {
                           type: "service",
