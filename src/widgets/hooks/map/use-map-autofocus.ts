@@ -17,10 +17,10 @@ export interface MapAutofocusOptions {
 }
 
 function useDebouncedValue<T>(value: T, delay: number) {
-  const v = useMemo(() => ({ current: value }), []);
+  const v = useMemo(() => ({ current: value }), [value]);
   v.current = value;
   // simple micro-debounce via ref scheduling
-  const [_, setTick] = ((): [number, (n: number) => void] => {
+  const [, setTick] = ((): [number, (n: number) => void] => {
     // lazy closure to avoid importing React state; works fine in hooks
     let tick = 0;
     const set = (n: number) => { tick = n; };
