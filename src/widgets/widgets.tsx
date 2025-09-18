@@ -3,6 +3,7 @@ import React from "react";
 import { HUDWidget } from "./HUDWidget";
 import { MapWidget } from "./MapWidget";
 import { SampleWidget } from "./SampleWidget";
+import { ActuatorWidget } from "./ActuatorWidget";
 import { SettingsWidget } from "./SettingsWidget";
 import { ROSParametersWidget } from "./ROSParametersWidget";
 import { GaugeWidget } from "./GaugeWidget";
@@ -12,6 +13,7 @@ export const WIDGETS: Record<string, React.ComponentType<any>> = {
   map: MapWidget,
   gauge: GaugeWidget,
   sample: SampleWidget,
+  actuator: ActuatorWidget,
   settings: SettingsWidget, // <-- add if you have it
   rosParameters: ROSParametersWidget,
 };
