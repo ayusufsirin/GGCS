@@ -25,11 +25,6 @@ const targetSpeedTopic: Topic = {
   type: "std_msgs/msg/Float64"
 }
 
-const altitudeTopic: Topic = {
-  name: "/altitude",
-  type: "std_msgs/msg/Float64"
-};
-
 const accelTopic: Topic = {
   name: "/accel",
   type: "std_msgs/msg/Float64"
@@ -65,8 +60,8 @@ const hudWidget: Widget = {
     },
     altitude: {
       type: "subscriber",
-      topic: altitudeTopic,
-      topicField: ".data"
+      topic: gpsTopic,
+      topicField: ".altitude"
     }
   }
 };
