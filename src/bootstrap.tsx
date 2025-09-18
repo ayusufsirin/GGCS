@@ -5,52 +5,25 @@ import { config } from "./config";
 import { WIDGETS } from "./widgets/widgets";
 import { FallbackWidget } from "./widgets/FallbackWidget";
 import { useAttachAllBindings } from "./middleware/attach-bindings";
+import { Entity, Grids, Tab } from "./interfaces";
 
 // ---------- Shared helpers ----------
 const joinPath = (path: string[]) => path.join(".");
 
-type GridItemNode = {
-  label?: string;
-  width: number;
-  height: number;
-  x: number;
-  y: number;
-  widget?: { name: string; config?: Record<string, unknown> };
-  tabs?: { items: Record<string, any> };
-  grids?: any;
-};
-
-type GridNode = {
-  horizontal: number;
-  vertical: number;
-  items: Record<string, GridItemNode>;
-};
-
-type TabNode = {
-  label?: string;
-  widget?: { name: string; config?: Record<string, unknown> };
-  tabs?: { items: Record<string, any> };
-  grids?: GridNode;
-};
-
-type AnyNode = {
-  widget?: { name: string; config?: Record<string, unknown> };
-  tabs?: { items: Record<string, TabNode> };
-  grids?: GridNode;
-};
 
 // ---------- Widget frame (ROS-agnostic widgets) ----------
-function WidgetFrame({ instanceId, name }: { instanceId: string; name: string }) {
+function WidgetFrame({ instanceId, name, props }: { instanceId: string; name: string; props?: Record<string, any> }) {
   const Comp = WIDGETS[name] ?? FallbackWidget;
   return (
     <WidgetAttrProvider instanceId={instanceId}>
-      <Comp />
+      <Comp {...props} />
     </WidgetAttrProvider>
   );
 }
 
 // ---------- Recursive node renderer ----------
-function RenderNode({ node, path }: { node: AnyNode; path: string[] }) {
+function RenderNode({ node, path }: { node: Entity; path: string[] }) {
+  console.debug("RenderNode", path, node);
   // Precedence: tabs > grids > widget
   if (node?.tabs?.items) {
     return <TabsView tabs={node.tabs.items} path={path} />;
@@ -62,7 +35,7 @@ function RenderNode({ node, path }: { node: AnyNode; path: string[] }) {
     const instanceId = joinPath(path);
     return (
       <div style={{ height: "100%", boxSizing: "border-box" }}>
-        <WidgetFrame instanceId={instanceId} name={node.widget.name} />
+        <WidgetFrame instanceId={instanceId} name={node.widget.name} props={node.widget.props as any} />
       </div>
     );
   }
@@ -74,7 +47,7 @@ function TabsView({
                     tabs,
                     path,
                   }: {
-  tabs: Record<string, TabNode>;
+  tabs: Record<string, Tab>;
   path: string[];
 }) {
   const keys = Object.keys(tabs);
@@ -110,7 +83,7 @@ function TabsView({
       <div style={{ flex: 1, minHeight: 0 }}>
         {activeNode ? (
           <div style={{ height: "100%", boxSizing: "border-box", padding: 8 }}>
-            <RenderNode node={activeNode as AnyNode} path={[...path, "tabs", "items", active]} />
+            <RenderNode node={activeNode as Entity} path={[...path, "tabs", "items", active]} />
           </div>
         ) : null}
       </div>
@@ -123,7 +96,7 @@ function GridView({
                     grid,
                     path,
                   }: {
-  grid: GridNode;
+  grid: Grids;
   path: string[];
 }) {
   const cols = Math.max(1, grid.horizontal ?? 12);
@@ -184,7 +157,7 @@ function GridView({
         markCells(y, x, h, w, itemKey);
 
         const itemPath = [...path, "grids", "items", itemKey];
-        const node: AnyNode = {
+        const node: Entity = {
           widget: item.widget,
           tabs: item.tabs as any,
           grids: item.grids as any,
@@ -241,13 +214,13 @@ export function Dashboard() {
   // Bind once for the whole config (scanner already recursive)
   useAttachAllBindings(config);
 
-  const root: AnyNode = (config as unknown) as AnyNode;
+  const root: Entity = (config as unknown) as Entity;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
       {/* Root can be tabs/grids/widget — we render it recursively */}
       <div style={{ flex: 1, minHeight: 0 }}>
-        <RenderNode node={root as AnyNode} path={[]} />
+        <RenderNode node={root as Entity} path={[]} />
       </div>
       <CopyrightBar
         owner="Ahmet Yusuf Şirin"

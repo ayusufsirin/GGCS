@@ -47,6 +47,7 @@ export type Value = SubscriberValue | ServiceValue | ConstantValue | PublisherVa
 
 export interface Widget {
   name: string;
+  props?: Record<string, any>;
   config: Record<string, Value>;
 }
 
