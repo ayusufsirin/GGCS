@@ -128,31 +128,96 @@ export const config: Entity = {
       home: {
         label: "Home",
         grids: {
-          horizontal: 12,
+          horizontal: 24,
           vertical: 12,
           items: {
             map: {
               label: "Map",
-              width: 8,
+              width: 16,
               height: 12,
-              x: 4,
+              x: 8,
               y: 0,
               widget: mapWidget
             },
             hud: {
               label: "HUD",
-              width: 4,
+              width: 8,
               height: 4,
               x: 0,
               y: 0,
               widget: hudWidget
             },
-            panel: {
-              label: "Panel",
-              width: 4,
-              height: 8,
+            gpsStatus: {
+              label: "GPS Status",
+              width: 1,
+              height: 1,
               x: 0,
               y: 4,
+              widget: {
+                name: "status",
+                props: {
+                  // label: "GPS Satellites",
+                  kind: "number",
+                  valueAttr: "gpsSatellites",
+                  icon: "satellite",
+                  unit: "sat",
+                  decimals: 0,
+                  thresholds: [
+                    { min: 0, color: "#D14343" },
+                    { min: 4, color: "#E3A008" },
+                    { min: 8, color: "#0E9F6E" },
+                  ],
+                  hint: "Locked satellites",
+                  dense: true,
+                  iconSize: 40
+                },
+                config: {
+                  gpsSatellites: {
+                    type: "subscriber",
+                    topic: gpsTopic,
+                    topicField: ".status.status"
+                  },
+                }
+              }
+            },
+            relayStatus: {
+              label: "Relay Status",
+              width: 1,
+              height: 1,
+              x: 1,
+              y: 4,
+              widget: {
+                name: "status",
+                props: {
+                  // label: "Relay",
+                  kind: "boolean",
+                  valueAttr: "relayA",
+                  icon: "power",
+                  onText: "ON",
+                  offText: "OFF",
+                  onColor: "#0E9F6E",
+                  offColor: "#D14343",
+                  onIconName: "ok",
+                  offIconName: "error",
+                  hint: "Channel A",
+                  dense: true,
+                },
+                config: {
+                  relayA: {
+                    type: "subscriber",
+                    topic: { name: "/relay/state", type: "std_msgs/msg/Bool" },
+                    topicField: ".data", // boolean
+                  },
+
+                }
+              }
+            },
+            panel: {
+              label: "Panel",
+              width: 8,
+              height: 7,
+              x: 0,
+              y: 5,
               tabs: {
                 items: {
                   sampleWidget: {
