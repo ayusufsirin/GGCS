@@ -52,11 +52,16 @@ export function collectSubscriberBindings(config: unknown): SubscriberBinding[] 
   return collectBindings<SubscriberBinding>(
     config,
     // match
-    (e) => e.type === ValueTypes.subscriber && isObject(e.topic) && typeof e.topicField === "string",
+    (e) =>
+      e.type === ValueTypes.subscriber &&
+      isObject(e.topic) &&
+      // topicField is optional; allow undefined or string
+      (typeof e.topicField === "string" || typeof e.topicField === "undefined"),
     // map
     ({ instanceId, attrName, entry }) => {
       const topic = entry.topic as Topic;
-      const topicField = String(entry.topicField);
+      // When topicField is omitted, use empty string to signal "use full message"
+      const topicField = typeof entry.topicField === "string" ? String(entry.topicField) : "";
       return { instanceId, attrName, topic, topicField };
     }
   );

@@ -25,7 +25,7 @@ export const ValueTypes = {
 export interface SubscriberValue {
   type: typeof ValueTypes.subscriber;
   topic: Topic;
-  topicField: string;
+  topicField?: string;
 }
 
 export interface ServiceValue {
