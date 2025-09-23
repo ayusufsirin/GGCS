@@ -246,6 +246,22 @@ export const config: Entity = {
         label: "Settings",
         widget: { name: "settings", config: {} }
       },
+      diagnostics: {
+        label: "Diagnostics",
+        widget: {
+          name: "diagnostics",
+          props: {
+            names: ["imu", "battery", "gps"] // columns by DiagnosticStatus.name
+          },
+          config: {
+            diagnostics: {
+              type: "subscriber",
+              topic: { name: "/diagnostics", type: "diagnostic_msgs/msg/DiagnosticArray" },
+            }
+          }
+        }
+
+      }
     }
   }
 };
