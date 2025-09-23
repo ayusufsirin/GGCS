@@ -64,3 +64,47 @@ docker exec -it ggcs-rosbridge /bin/bash -c \
   'source /opt/ros/humble/setup.bash && \
    ros2 topic pub /gps sensor_msgs/msg/NavSatFix "{latitude: 36.000, longitude: 42.000}"'
 ```
+
+```bash
+docker exec -it ggcs-rosbridge /bin/bash -lc '
+source /opt/ros/humble/setup.bash && python3 - <<PY
+import rclpy, time, random
+from rclpy.node import Node
+from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
+
+rclpy.init()
+node = Node("mock_diagnostics_pub")
+pub = node.create_publisher(DiagnosticArray, "/diagnostics", 10)
+
+def make_msg():
+    arr = DiagnosticArray()
+    arr.header.stamp = node.get_clock().now().to_msg()
+
+    def S(name, level, msg, kv): 
+        s = DiagnosticStatus()
+        s.name = name
+        s.level = level
+        s.message = msg
+        s.hardware_id = f"{name}-001"
+        s.values = [KeyValue(key=k, value=v) for k,v in kv.items()]
+        return s
+
+    arr.status = [
+        S("imu", DiagnosticStatus.OK, "IMU OK", {"temperature": f"{36.0+random.random():.1f}"}),
+        S("battery", DiagnosticStatus.OK if random.random()>0.2 else DiagnosticStatus.WARN,
+          "Battery nominal" if random.random()>0.2 else "Battery Warning",
+          {"voltage": f"{11.0+random.random():.2f}"}),
+        S("gps", DiagnosticStatus.OK, "GPS Locked", {"satellites": f"{10+int(random.random()*5)}"})
+    ]
+    return arr
+
+try:
+    while rclpy.ok():
+        pub.publish(make_msg())
+        node.get_logger().info("Published /diagnostics with enums")
+        time.sleep(1.0)
+finally:
+    rclpy.shutdown()
+PY
+'
+```
