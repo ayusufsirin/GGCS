@@ -23,7 +23,9 @@ export function SampleWidget({ speedLabel }: Props) {
   const publishSpeed = () => {
     const v = Number(targetSpeed);
     if (!Number.isFinite(v)) return;
-    publishSetSpeed({ data: v });
+    // Middleware now supports topicField mapping, so send primitive
+    publishSetSpeed(v);
+    // publishSetSpeed({ data: v });  // This is also valid
   };
 
   let _speed: string = "—";

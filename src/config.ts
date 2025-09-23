@@ -178,6 +178,7 @@ export const config: Entity = {
                         setSpeed: {
                           type: "publisher",
                           topic: targetSpeedTopic,
+                          topicField: ".data"
                         },
                         targetSpeed: {
                           type: "subscriber",
@@ -228,8 +229,43 @@ export const config: Entity = {
       },
       settings: {
         label: "Settings",
-        widget: { name: "settings", config: {} }
+        widget: {
+          name: "settings", config: {
+            setParams: {
+              type: "service",
+              service: {name: "/reset_service_node/set_parameters", type: "rcl_interfaces/srv/SetParameters"}
+            },
+            getParams: {
+              type: "service",
+              service: {name: "/reset_service_node/get_parameters", type: "rcl_interfaces/srv/GetParameters"}
+            },
+          }
+        }
       },
+      rosParameters: {
+        label: "ROS Parameters",
+        widget: {
+          name: "rosParameters",
+          config: {
+            listNodes: {
+              type: "service",
+              service: { name: "/rosapi/nodes", type: "rosapi/Nodes" }
+            },
+            getParamNames: {
+              type: "service",
+              service: { name: "/rosapi/get_param_names", type: "rosapi/GetParamNames" }
+            },
+            getParam: {
+              type: "service",
+              service: { name: "/rosapi/get_param", type: "rosapi/GetParam" }
+            },
+            setParam: {
+              type: "service",
+              service: { name: "/rosapi/set_param", type: "rosapi/SetParam" }
+            }
+          }
+        }
+      }
     }
   }
 };
