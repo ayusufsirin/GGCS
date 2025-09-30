@@ -9,13 +9,6 @@ interface RelayState {
   transitions: number;
 }
 
-interface RelayNode {
-  nodeName: string;
-  level: number;
-  service: string;
-  relays: Map<string, RelayState>;
-}
-
 interface SetParametersRequest {
   parameters: Array<{
     name: string;
@@ -32,63 +25,55 @@ interface SetParametersResponse {
   }>;
 }
 
-export function RelayManagerWidget() {
+type Props = {
+  diagnosticsName: string;
+};
+
+export function RelayManagerWidget({ diagnosticsName }: Props) {
   const diagnostics = useAttr<any>("diagnostics");
-  const { call: setParameters, pending } = useServiceCall<SetParametersRequest, SetParametersResponse>("setRelayParameters");
+  const { call: setParameters, } = useServiceCall<SetParametersRequest, SetParametersResponse>("setRelayParameters");
   
-  const [nodes, setNodes] = useState<Map<string, RelayNode>>(new Map());
+  const [relays, setRelays] = useState<Map<string, RelayState>>(new Map());
+  const [level, setLevel] = useState<number>(0);
   const [pendingRelays, setPendingRelays] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!diagnostics || !diagnostics.status) return;
 
-    const newNodes = new Map<string, RelayNode>();
+    // Find the specific diagnostic status by name
+    const status = diagnostics.status.find((s: any) => s.name === diagnosticsName);
+    if (!status) return;
 
-    for (const status of diagnostics.status) {
-      // Filter for relay diagnostics
-      if (!/Relays/i.test(status.name)) continue;
+    const kv: Record<string, string> = {};
+    for (const kvp of status.values || []) {
+      kv[kvp.key] = kvp.value;
+    }
 
-      const kv: Record<string, string> = {};
-      for (const kvp of status.values || []) {
-        kv[kvp.key] = kvp.value;
-      }
+    setLevel(status.level || 0);
 
-      const nodeName = kv["node_name"] || status.name.replace(/:?\s*Relays/i, "").trim() || "unknown";
-      const service = kv["service_set_parameters"] || `/relay_manager/set_parameters`;
-      const level = status.level || 0;
+    const newRelays = new Map<string, RelayState>();
 
-      const relays = new Map<string, RelayState>();
+    // Discover relays by finding keys ending with .gpio
+    const relayNames = Object.keys(kv)
+      .filter(k => k.endsWith(".gpio"))
+      .map(k => k.slice(0, -5));
 
-      // Discover relays by finding keys ending with .gpio
-      const relayNames = Object.keys(kv)
-        .filter(k => k.endsWith(".gpio"))
-        .map(k => k.slice(0, -5));
-
-      for (const relayName of relayNames) {
-        relays.set(relayName, {
-          gpio: kv[`${relayName}.gpio`] || "",
-          active_low: kv[`${relayName}.active_low`] === "true",
-          current_state: (kv[`${relayName}.current_state`] || "OFF").toUpperCase() as "ON" | "OFF",
-          transitions: parseInt(kv[`${relayName}.transitions`] || "0", 10),
-        });
-      }
-
-      newNodes.set(nodeName, {
-        nodeName,
-        level,
-        service,
-        relays,
+    for (const relayName of relayNames) {
+      newRelays.set(relayName, {
+        gpio: kv[`${relayName}.gpio`] || "",
+        active_low: kv[`${relayName}.active_low`] === "true",
+        current_state: (kv[`${relayName}.current_state`] || "OFF").toUpperCase() as "ON" | "OFF",
+        transitions: parseInt(kv[`${relayName}.transitions`] || "0", 10),
       });
     }
 
-    setNodes(newNodes);
-  }, [diagnostics]);
+    setRelays(newRelays);
+  }, [diagnostics, diagnosticsName]);
 
-  const toggleRelay = async (nodeName: string, relayName: string, currentState: "ON" | "OFF") => {
-    const key = `${nodeName}::${relayName}`;
-    setPendingRelays(prev => new Set(prev).add(key));
+  const toggleRelay = async (relayName: string, currentState: "ON" | "OFF") => {
+    setPendingRelays(prev => new Set(prev).add(relayName));
 
-    const desiredState = currentState === "ON" ? false : true;
+    const desiredState = currentState !== "ON";
 
     try {
       await setParameters({
@@ -109,63 +94,61 @@ export function RelayManagerWidget() {
       setTimeout(() => {
         setPendingRelays(prev => {
           const next = new Set(prev);
-          next.delete(key);
+          next.delete(relayName);
           return next;
         });
       }, 500);
     }
   };
 
-  if (nodes.size === 0) {
+  if (relays.size === 0) {
     return (
       <div style={styles.container}>
-        <div style={styles.status}>Waiting for diagnostics...</div>
+        <div style={styles.status}>
+          Waiting for diagnostics: <strong>{diagnosticsName}</strong>
+        </div>
       </div>
     );
   }
 
   return (
     <div style={styles.container}>
-      {Array.from(nodes.values()).map(node => (
-        <div key={node.nodeName} style={styles.nodeCard}>
-          <div style={styles.nodeHeader}>
-            <div style={styles.nodeTitle}>{node.nodeName}</div>
-            <div style={styles.nodeSub}>
-              <span style={styles.pill}>svc: {node.service}</span>
-              {node.level === 1 && <span style={styles.warn}> WARN</span>}
-              {node.level >= 2 && <span style={styles.warn}> ERROR</span>}
-            </div>
-          </div>
-          <div style={styles.relays}>
-            {Array.from(node.relays.entries()).map(([relayName, relay]) => {
-              const key = `${node.nodeName}::${relayName}`;
-              const isPending = pendingRelays.has(key);
-              const isOn = relay.current_state === "ON";
-
-              return (
-                <div key={relayName} style={styles.relay}>
-                  <div style={styles.meta}>
-                    <div style={styles.name}>{relayName}</div>
-                    <div style={styles.sub}>
-                      GPIO {relay.gpio} · {relay.active_low ? "active-low" : "active-high"} · {relay.transitions} changes
-                    </div>
-                  </div>
-                  <button
-                    style={{
-                      ...styles.toggle,
-                      ...(isPending ? styles.togglePending : isOn ? styles.toggleOn : styles.toggleOff),
-                    }}
-                    disabled={isPending}
-                    onClick={() => toggleRelay(node.nodeName, relayName, relay.current_state)}
-                  >
-                    {isPending ? "..." : isOn ? "ON" : "OFF"}
-                  </button>
-                </div>
-              );
-            })}
+      <div style={styles.nodeCard}>
+        <div style={styles.nodeHeader}>
+          <div style={styles.nodeTitle}>{diagnosticsName}</div>
+          <div style={styles.nodeSub}>
+            {level === 1 && <span style={styles.warn}> WARN</span>}
+            {level >= 2 && <span style={styles.warn}> ERROR</span>}
           </div>
         </div>
-      ))}
+        <div style={styles.relays}>
+          {Array.from(relays.entries()).map(([relayName, relay]) => {
+            const isPending = pendingRelays.has(relayName);
+            const isOn = relay.current_state === "ON";
+
+            return (
+              <div key={relayName} style={styles.relay}>
+                <div style={styles.meta}>
+                  <div style={styles.name}>{relayName}</div>
+                  <div style={styles.sub}>
+                    GPIO {relay.gpio} · {relay.active_low ? "active-low" : "active-high"} · {relay.transitions} changes
+                  </div>
+                </div>
+                <button
+                  style={{
+                    ...styles.toggle,
+                    ...(isPending ? styles.togglePending : isOn ? styles.toggleOn : styles.toggleOff),
+                  }}
+                  disabled={isPending}
+                  onClick={() => toggleRelay(relayName, relay.current_state)}
+                >
+                  {isPending ? "..." : isOn ? "ON" : "OFF"}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
@@ -173,19 +156,16 @@ export function RelayManagerWidget() {
 const styles = {
   container: {
     padding: "16px",
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))",
-    gap: "16px",
     height: "100%",
     overflow: "auto",
-    background: "#0b0f14",
+    background: "transparent",
     color: "#e9eef4",
     fontFamily: "system-ui, 'Segoe UI', Roboto, Helvetica, Arial",
     fontSize: "14px",
   } as React.CSSProperties,
   status: {
     color: "#9aa8b4",
-    fontSize: "12px",
+    fontSize: "14px",
   } as React.CSSProperties,
   nodeCard: {
     border: "1px solid #1f2a3a",
@@ -193,7 +173,7 @@ const styles = {
     background: "#0f141c",
     padding: "12px",
     boxShadow: "0 6px 24px rgba(0, 0, 0, 0.16)",
-    height: "fit-content",
+    maxWidth: "800px",
   } as React.CSSProperties,
   nodeHeader: {
     display: "flex",

@@ -127,8 +127,11 @@ const accelGaugeWidget: Widget = {
   }
 };
 
-const relayManagerWidget: Widget = {
+const relay1Widget: Widget = {
   name: "relayManager",
+  props: {
+    diagnosticsName: "relay1: Relays"  // The exact name from diagnostics status
+  },
   config: {
     diagnostics: {
       type: "subscriber",
@@ -137,7 +140,25 @@ const relayManagerWidget: Widget = {
     },
     setRelayParameters: {
       type: "service",
-      service: {name: "/relay_manager/set_parameters", type: "rcl_interfaces/srv/SetParameters"}
+      service: {name: "/iyb/relay1/set_parameters", type: "rcl_interfaces/srv/SetParameters"}
+    }
+  }
+};
+
+const relay2Widget: Widget = {
+  name: "relayManager",
+  props: {
+    diagnosticsName: "relay2: Relays"  // The exact name from diagnostics status
+  },
+  config: {
+    diagnostics: {
+      type: "subscriber",
+      topic: diagnosticsTopic,
+      topicField: ""  // We need the full message
+    },
+    setRelayParameters: {
+      type: "service",
+      service: {name: "/ayb/relay2/set_parameters", type: "rcl_interfaces/srv/SetParameters"}
     }
   }
 };
@@ -253,7 +274,28 @@ export const config: Entity = {
       },
       relayManager: {
         label: "Relay Manager",
-        widget: relayManagerWidget
+        grids: {
+          horizontal: 4,
+          vertical: 4,
+          items: {
+            relay1: {
+              label: "Relay 1",
+              height: 1,
+              width: 1,
+              x: 0,
+              y: 0,
+              widget: relay1Widget
+            },
+            relay2: {
+              label: "Relay 2",
+              height: 1,
+              width: 1,
+              x: 1,
+              y: 0,
+              widget: relay2Widget
+            }
+          }
+        }
       }
     }
   }
