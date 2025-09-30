@@ -40,6 +40,11 @@ const gpsTopic: Topic = {
   type: "sensor_msgs/msg/NavSatFix"
 };
 
+const diagnosticsTopic: Topic = {
+  name: "/diagnostics",
+  type: "diagnostic_msgs/msg/DiagnosticArray"
+};
+
 const hudWidget: Widget = {
   name: "hud",
   config: {
@@ -118,6 +123,21 @@ const accelGaugeWidget: Widget = {
     label: {
       type: "constant",
       constant: "Acceleration (m/s^2)",
+    }
+  }
+};
+
+const relayManagerWidget: Widget = {
+  name: "relayManager",
+  config: {
+    diagnostics: {
+      type: "subscriber",
+      topic: diagnosticsTopic,
+      topicField: ""  // We need the full message
+    },
+    setRelayParameters: {
+      type: "service",
+      service: {name: "/relay_manager/set_parameters", type: "rcl_interfaces/srv/SetParameters"}
     }
   }
 };
@@ -231,6 +251,10 @@ export const config: Entity = {
         label: "Settings",
         widget: { name: "settings", config: {} }
       },
+      relayManager: {
+        label: "Relay Manager",
+        widget: relayManagerWidget
+      }
     }
   }
 };
