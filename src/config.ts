@@ -96,66 +96,37 @@ const mapWidget: Widget = {
 
 const speedGaugeWidget: Widget = {
   name: "gauge",
+  props: {
+    label: "Speed",
+    units: "(m/s)",
+    min: 0.0,
+    max: 10.0,
+    decimals: 2,
+    warn: 3,
+    danger: 7,
+    segments: 10,
+    needleColor: "#dc3939",
+  },
   config: {
     value: {
       type: "subscriber",
       topic: speedTopic,
       topicField: ".data"
-    },
-    label: {
-      type: "constant",
-      constant: "Speed",
-    },
-    units: {
-      type: "constant",
-      constant: "(m/s)",
-    },
-    min: {
-      type: "constant",
-      constant: 0.0,
-    },
-    max: {
-      type: "constant",
-      constant: 10.0,
-    },
-    decimals: {
-      type: "constant",
-      constant: 2,
-    },
-    warn: {
-      type: "constant",
-      constant: 3,
-    },
-    danger: {
-      type: "constant",
-      constant: 7,
-    },
-    segments: {
-      type: "constant",
-      constant: 10,
-    },
-    needleColor: {
-      type: "constant",
-      constant: "#dc3939",
     }
   }
 };
 
 const accelGaugeWidget: Widget = {
   name: "gauge",
+  props: {
+    label: "Acceleration",
+    units: "(m/s^2)",
+  },
   config: {
     value: {
       type: "subscriber",
       topic: accelTopic,
       topicField: ".data"
-    },
-    label: {
-      type: "constant",
-      constant: "Acceleration",
-    },
-    units: {
-      type: "constant",
-      constant: "(m/s^2)",
     }
   }
 };
