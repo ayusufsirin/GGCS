@@ -2,38 +2,37 @@ import React, { useMemo } from "react";
 import ReactSpeedometer, { Transition } from "react-d3-speedometer";
 import { useAttr } from "../middleware/hooks/use-attr";
 
-type Num = number | undefined;
-type Str = string | undefined;
+type Props = {
+  min?: number
+  max?: number
+  label?: string
+  units?: string
+  decimals?: number
+  warn?: number
+  danger?: number
+  segments?: number
+  needleColor?: string
+};
 
-export function GaugeWidget() {
+export function GaugeWidget({
+                              min = 0,
+                              max = 100,
+                              label = "",
+                              units = "",
+                              decimals = 0,
+                              warn = undefined,
+                              danger = undefined,
+                              segments = 5,
+                              needleColor = "#111827",
+                            }: Props) {
   // Required/expected attrs (with defaults)
-  const valueAttr = useAttr<Num>("value");
-  const minAttr = useAttr<Num>("min");
-  const maxAttr = useAttr<Num>("max");
-  const labelAttr = useAttr<Str>("label");
-
-  // Optional
-  const unitsAttr = useAttr<Str>("units");            // e.g. "%", "°C"
-  const decimalsAttr = useAttr<Num>("decimals");      // 0..3
-  const warnAttr = useAttr<Num>("warn");              // threshold
-  const dangerAttr = useAttr<Num>("danger");          // threshold
-  const segmentsAttr = useAttr<Num>("segments");      // default 5
-  const needleColorAttr = useAttr<Str>("needleColor");// e.g. "#111827"
-
-  const min = (minAttr ?? 0) as number;
-  const max = (maxAttr ?? 100) as number;
+  const valueAttr = useAttr<number | undefined>("value");
   const value = Math.max(min, Math.min(max, (valueAttr ?? min) as number));
-  const label = (labelAttr ?? "") as string;
-  const units = (unitsAttr ?? "") as string;
-  const decimals = (decimalsAttr ?? 0) as number;
-  const segments = Math.min(12, Math.max(2, (segmentsAttr ?? 5) as number));
-  const needleColor = (needleColorAttr ?? "#111827") as string;
+  const _segments = Math.min(12, Math.max(2, (segments ?? 5) as number));
 
   // Segment stops (min → warn → danger → max) if thresholds present
   const { stops, colors } = useMemo(() => {
     const baseBlue = "#3b82f6";
-    const warn = typeof warnAttr === "number" ? warnAttr : undefined;
-    const danger = typeof dangerAttr === "number" ? dangerAttr : undefined;
 
     // clamp & sort thresholds
     const ths = [min];
@@ -46,7 +45,7 @@ export function GaugeWidget() {
     // Color map: normal → blue, warn → amber, danger → red
     let segColors: string[] = [];
     if (warn === undefined && danger === undefined) {
-      segColors = new Array(segments).fill(baseBlue);
+      segColors = new Array(_segments).fill(baseBlue);
       return {
         stops: undefined as unknown as number[], // let library auto segment
         colors: segColors,
@@ -61,7 +60,7 @@ export function GaugeWidget() {
       });
       return { stops: uniqueStops, colors: segColors };
     }
-  }, [min, max, warnAttr, dangerAttr, segments]);
+  }, [min, max, _segments]);
 
   // Width/height: let it fully fill parent
   return (
@@ -71,13 +70,13 @@ export function GaugeWidget() {
         width={320}
         height={200}
         fluidWidth={true}
-        forceRender={true}
+        // forceRender={true}
         minValue={min}
         maxValue={max}
         value={value}
         customSegmentStops={stops}                // if undefined, lib uses equal segments
         segmentColors={colors}
-        segments={stops ? undefined : segments}   // use equal segments only if no custom stops
+        segments={stops ? undefined : _segments}   // use equal segments only if no custom stops
         needleColor={needleColor}
         needleTransitionDuration={250}
         needleTransition={Transition.easeQuadOut}
