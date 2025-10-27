@@ -21,9 +21,10 @@ export const ValueTypes = {
   publisher: "publisher",
 } as const;
 
-interface TopicCommon {
+export interface TopicCommon {
   topic: Topic;
   topicField?: string;
+  topicWrapper?: (value: unknown) => unknown;
 }
 
 // Discriminated union for config values

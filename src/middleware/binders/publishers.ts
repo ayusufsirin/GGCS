@@ -1,15 +1,13 @@
 // src/middleware/binders/publishers.ts
 import { collectBindings, isObject } from "../config-scan";
-import { Topic, ValueTypes } from "../../interfaces";
+import { Topic, TopicCommon, ValueTypes } from "../../interfaces";
 import { sharedTopics } from "../roslib/shared-topic";
 import { publisherBus } from "../publisher-bus";
 
-export type PublisherBinding = {
+export interface PublisherBinding extends TopicCommon {
   instanceId: string;
   attrName: string;
-  topic: Topic;
-  topicField?: string;        // optional dot-path like ".data"
-};
+}
 
 function setByPath(target: any, dotPath: string, value: any) {
   const parts = dotPath.replace(/^\./, "").split(".").filter(Boolean);
@@ -33,7 +31,8 @@ export function collectPublisherBindings(config: unknown): PublisherBinding[] {
     ({ instanceId, attrName, entry }) => {
       const topic = entry.topic as Topic;
       const topicField = typeof (entry as any).topicField === "string" ? String((entry as any).topicField) : undefined;
-      return { instanceId, attrName, topic, topicField };
+      const topicWrapper = entry.topicWrapper as (value: unknown) => unknown;
+      return { instanceId, attrName, topic, topicField, topicWrapper };
     }
   );
 }
@@ -72,7 +71,9 @@ export function attachPublisherBindings(bindings?: PublisherBinding[]) {
             setByPath(msg, b.topicField, input);
           }
         }
-        pub.publish(msg);
+        // Apply wrapper for publishers if provided
+        const payload = typeof b.topicWrapper === "function" ? b.topicWrapper(msg) : msg;
+        pub.publish(payload);
       } catch {}
     });
 

@@ -40,6 +40,19 @@ const gpsTopic: Topic = {
   type: "sensor_msgs/msg/NavSatFix"
 };
 
+const speedTopicWrapper = (msg: unknown) => {
+  // msg is the full ROS message; extract and transform
+  const data = (msg as any)?.data;
+  const newData = (typeof data === "number") ? (data * 180) / Math.PI : data;
+  return { data: newData, deg: newData, rad: data };
+};
+
+const targetSpeedTopicWrapper = (msg: unknown) => {
+  const data = (msg as any)?.data;
+  const newData = (typeof data === "number") ? (data * 180) / Math.PI : data;
+  return { data: newData, deg: newData, rad: data };
+};
+
 const hudWidget: Widget = {
   name: "hud",
   config: {
@@ -165,7 +178,8 @@ export const config: Entity = {
                         speed: {
                           type: "subscriber",
                           topic: speedTopic,
-                          topicField: ".data"
+                          topicField: ".data",
+                          topicWrapper: speedTopicWrapper,
                         },
                         speedMultiplier: {
                           type: "constant",
@@ -178,7 +192,8 @@ export const config: Entity = {
                         setSpeed: {
                           type: "publisher",
                           topic: targetSpeedTopic,
-                          topicField: ".data"
+                          topicField: ".data",
+                          topicWrapper: targetSpeedTopicWrapper,
                         },
                         targetSpeed: {
                           type: "subscriber",
