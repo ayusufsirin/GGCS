@@ -21,11 +21,14 @@ export const ValueTypes = {
   publisher: "publisher",
 } as const;
 
-// Discriminated union for config values
-export interface SubscriberValue {
-  type: typeof ValueTypes.subscriber;
+interface TopicCommon {
   topic: Topic;
-  topicField: string;
+  topicField?: string;
+}
+
+// Discriminated union for config values
+export interface SubscriberValue extends TopicCommon {
+  type: typeof ValueTypes.subscriber;
 }
 
 export interface ServiceValue {
@@ -38,10 +41,8 @@ export interface ConstantValue {
   constant: unknown;
 }
 
-export interface PublisherValue {
+export interface PublisherValue extends TopicCommon {
   type: typeof ValueTypes.publisher;
-  topic: Topic;
-  topicField?: string;
 }
 
 export type Value = SubscriberValue | ServiceValue | ConstantValue | PublisherValue;
