@@ -1,14 +1,12 @@
 import { collectBindings, isObject } from "../config-scan";
 import { sharedTopics } from "../roslib/shared-topic";
 import { instanceStore } from "../instance-store";
-import { Topic, ValueTypes } from "../../interfaces";
+import { TopicCommon, Topic, ValueTypes } from "../../interfaces";
 
-export type SubscriberBinding = {
+export interface SubscriberBinding extends TopicCommon {
   instanceId: string; // unique path to this widget instance
   attrName: string;   // e.g. "speed" | "latitude"
-  topic: Topic;       // { name, type }
-  topicField: string; // e.g. ".data" or ".latitude"
-};
+}
 
 function getByPath(obj: any, dotPath: string) {
   const parts = dotPath.replace(/^\./, "").split(".").filter(Boolean);
@@ -38,7 +36,8 @@ export function attachSubscriberBindings(bindings?: SubscriberBinding[]) {
     const t = arr[0].topic;
     const off = sharedTopics.addListener(t, (msg) => {
       arr.forEach((b) => {
-        const val = getByPath(msg, b.topicField);
+        const processed = typeof b.topicWrapper === "function" ? b.topicWrapper(msg) : msg;
+        const val = b.topicField ? getByPath(processed, b.topicField) : processed;
         instanceStore.emit(b.instanceId, b.attrName, val);
       });
     });
@@ -57,7 +56,8 @@ export function collectSubscriberBindings(config: unknown): SubscriberBinding[] 
     ({ instanceId, attrName, entry }) => {
       const topic = entry.topic as Topic;
       const topicField = String(entry.topicField);
-      return { instanceId, attrName, topic, topicField };
+      const topicWrapper = entry.topicWrapper as (value: unknown) => unknown;
+      return { instanceId, attrName, topic, topicField, topicWrapper };
     }
   );
 }
