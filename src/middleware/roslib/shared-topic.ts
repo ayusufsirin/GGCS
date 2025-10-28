@@ -1,11 +1,11 @@
 // middleware/roslib/shared-topic.ts
 import ROSLIB from "roslib";
 import { getRos } from "./ros-conn";
+import { Topic } from "../../interfaces";
 
-export type TopicId = { name: string; type: string };
 type Listener = (msg: any) => void;
 
-const tkey = (t: TopicId) => `${t.name}|${t.type}`;
+const tkey = (t: Topic) => `${t.name}|${t.type}`;
 
 class SharedTopicRegistry {
   private ros: ROSLIB.Ros;
@@ -21,7 +21,7 @@ class SharedTopicRegistry {
     this.ros = getRos();
   }
 
-  addListener(t: TopicId, cb: Listener) {
+  addListener(t: Topic, cb: Listener) {
     const k = tkey(t);
     let e = this.entries.get(k);
     if (!e) {
@@ -57,7 +57,7 @@ class SharedTopicRegistry {
 
   // Get a persistent publisher for repeated publishes. Keeps the topic advertised
   // until dispose() is called.
-  getPublisher(t: TopicId) {
+  getPublisher(t: Topic) {
     const k = tkey(t);
     let e = this.entries.get(k);
     if (!e) {
