@@ -10,7 +10,6 @@ export function usePublisher(attrName: string) {
   return useMemo(() => {
     return (msg: any) => {
       const fn = publisherBus.get(ctx.instanceId, attrName);
-      console.log("usePublisher", ctx.instanceId, attrName, msg, fn);
       if (!fn) {
         // No publisher configured for this attribute
         return;
