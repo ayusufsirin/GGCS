@@ -1,45 +1,8 @@
 import React from "react";
 import { useAttr } from "../middleware/hooks/use-attr";
-import {
-  Activity,
-  Antenna,
-  CheckCircle2,
-  Cpu,
-  Gauge,
-  LucideIcon,
-  Power,
-  Satellite,
-  Thermometer,
-  Wifi,
-  XCircle,
-} from "lucide-react";
+import { LucideIcon } from "lucide-react";
 
 /* ----------------------------- Types ----------------------------- */
-
-type IconName =
-  | "satellite"
-  | "power"
-  | "wifi"
-  | "cpu"
-  | "thermo"
-  | "gauge"
-  | "antenna"
-  | "activity"
-  | "ok"
-  | "error";
-
-const IconMap: Record<IconName, LucideIcon> = {
-  satellite: Satellite,
-  power: Power,
-  wifi: Wifi,
-  cpu: Cpu,
-  thermo: Thermometer,
-  gauge: Gauge,
-  antenna: Antenna,
-  activity: Activity,
-  ok: CheckCircle2,
-  error: XCircle,
-};
 
 type NumberThreshold = { min: number; color: string };
 
@@ -54,7 +17,7 @@ export type StatusWidgetProps = {
   valueAttr: string;
 
   /** Optional base icon (overridden by on/off specific icons for boolean) */
-  icon?: IconName;
+  icon?: LucideIcon;
 
   /** Compact layout */
   dense?: boolean;
@@ -75,19 +38,14 @@ export type StatusWidgetProps = {
   offText?: string;
   onColor?: string;
   offColor?: string;
-  onIconName?: IconName;
-  offIconName?: IconName;
+  onIcon?: LucideIcon;
+  offIcon?: LucideIcon;
 
   /** Small hint text under the value */
   hint?: string;
 };
 
 /* --------------------------- Helpers ---------------------------- */
-
-function pickIcon(name?: IconName): LucideIcon | null {
-  if (!name) return null;
-  return IconMap[name] ?? null;
-}
 
 function colorByThreshold(v: number, th?: NumberThreshold[]): string | undefined {
   if (!th || th.length === 0) return undefined;
@@ -149,8 +107,8 @@ export function StatusWidget(props: StatusWidgetProps) {
     offText = "Off",
     onColor = "#0E9F6E",
     offColor = "#D14343",
-    onIconName,
-    offIconName,
+    onIcon,
+    offIcon,
 
     hint,
   } = props;
@@ -161,7 +119,7 @@ export function StatusWidget(props: StatusWidgetProps) {
   // Compute icon + text + color depending on kind
   let displayText = empty;
   let color: string | undefined;
-  let Icon: LucideIcon | null = pickIcon(icon);
+  let Icon: LucideIcon | undefined = icon;
 
   if (kind === "number") {
     const v = typeof raw === "number" ? raw : undefined;
@@ -176,8 +134,7 @@ export function StatusWidget(props: StatusWidgetProps) {
     if (typeof v === "boolean") {
       displayText = v ? onText : offText;
       color = v ? onColor : offColor;
-      const chosen = v ? onIconName ?? icon : offIconName ?? icon;
-      Icon = pickIcon(chosen);
+      Icon = v ? onIcon ?? icon : offIcon ?? icon;
     }
   }
 
@@ -198,11 +155,11 @@ export function StatusWidget(props: StatusWidgetProps) {
           alignItems: dense ? "center" : "flex-start",
         }}
       >
-        {Icon && <Icon size={iconSize} style={{ opacity: 0.85, color }} />}
+        {Icon && <Icon size={iconSize} style={{ opacity: 0.85, color }}/>}
         <div style={{ display: "flex", flexDirection: "column" }}>
           <div style={{ fontWeight: 600, fontSize: dense ? 9 : 14 }}>{label}</div>
           <div style={{ marginTop: dense ? 0 : 4 }}>
-            <Pill text={displayText} color={color} dense={dense} />
+            <Pill text={displayText} color={color} dense={dense}/>
           </div>
           {hint && (
             <div style={{ fontSize: 9, opacity: 0.7, marginTop: 2 }}>{hint}</div>

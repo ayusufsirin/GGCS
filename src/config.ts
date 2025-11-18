@@ -1,5 +1,12 @@
 import { Entity, Topic, Widget } from "./interfaces";
 
+import {
+  CheckCircle2,
+  Power,
+  Satellite,
+  XCircle,
+} from "lucide-react";
+
 const rollTopic: Topic = {
   name: "/roll",
   type: "std_msgs/msg/Float64"
@@ -172,7 +179,7 @@ export const config: Entity = {
                   // label: "GPS Satellites",
                   kind: "number",
                   valueAttr: "gpsSatellites",
-                  icon: "satellite",
+                  icon: Satellite,
                   unit: "sat",
                   decimals: 0,
                   thresholds: [
@@ -205,13 +212,13 @@ export const config: Entity = {
                   // label: "Relay",
                   kind: "boolean",
                   valueAttr: "relayA",
-                  icon: "power",
+                  icon: Power,
                   onText: "ON",
                   offText: "OFF",
                   onColor: "#0E9F6E",
                   offColor: "#D14343",
-                  onIconName: "ok",
-                  offIconName: "error",
+                  onIcon: CheckCircle2,
+                  offIcon: XCircle,
                   hint: "Channel A",
                   dense: true,
                 },
