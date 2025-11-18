@@ -1,19 +1,9 @@
 import { Entity, Topic, Widget } from "./interfaces";
 
-const rollTopic: Topic = {
-  name: "/roll",
-  type: "std_msgs/msg/Float64"
-};
-
-const pitchTopic: Topic = {
-  name: "/pitch",
-  type: "std_msgs/msg/Float64"
-};
-
-const headingTopic: Topic = {
-  name: "/heading",
-  type: "std_msgs/msg/Float64"
-};
+const arnavINSTopic: Topic = {
+  name: "/ArdicLabs/Arnav/Gnss_Ins_data",
+  type: "ardiclabs_arnav_msgs/msg/Ins"
+}
 
 const speedTopic: Topic = {
   name: "/speed",
@@ -53,18 +43,21 @@ const hudWidget: Widget = {
   config: {
     roll: {
       type: "subscriber",
-      topic: rollTopic,
-      topicField: ".data"
+      topic: arnavINSTopic,
+      topicField: ".roll_deg",
+      topicWrapper: (msg: any) => ({ roll_deg: msg.roll_rad * 180 / Math.PI })
     },
     pitch: {
       type: "subscriber",
-      topic: pitchTopic,
-      topicField: ".data"
+      topic: arnavINSTopic,
+      topicField: ".pitch_deg",
+      topicWrapper: (msg: any) => ({ pitch_deg: msg.pitch_rad * 180 / Math.PI })
     },
     heading: {
       type: "subscriber",
-      topic: headingTopic,
-      topicField: ".data"
+      topic: arnavINSTopic,
+      topicField: ".yaw_deg",
+      topicWrapper: (msg: any) => ({ yaw_deg: msg.yaw_rad * 180 / Math.PI })
     },
     speed: {
       type: "subscriber",
@@ -73,8 +66,8 @@ const hudWidget: Widget = {
     },
     altitude: {
       type: "subscriber",
-      topic: gpsTopic,
-      topicField: ".altitude"
+      topic: arnavINSTopic,
+      topicField: ".h_m"
     }
   }
 };
@@ -82,23 +75,27 @@ const hudWidget: Widget = {
 const mapWidget: Widget = {
   name: "map",
   props: {
-    initialZoom: 20
+    initialZoom: 20,
+    maxZoom: 24
   },
   config: {
     latitude: {
       type: "subscriber",
-      topic: gpsTopic,
-      topicField: ".latitude"
+      topic: arnavINSTopic,
+      topicField: ".lat_deg",
+      topicWrapper: (msg: any) => ({ lat_deg: msg.lat_rad * 180 / Math.PI })
     },
     longitude: {
       type: "subscriber",
-      topic: gpsTopic,
-      topicField: ".longitude"
+      topic: arnavINSTopic,
+      topicField: ".lon_deg",
+      topicWrapper: (msg: any) => ({ lon_deg: msg.lon_rad * 180 / Math.PI })
     },
     heading: {
       type: "subscriber",
-      topic: headingTopic,
-      topicField: ".data"
+      topic: arnavINSTopic,
+      topicField: ".yaw_deg",
+      topicWrapper: (msg: any) => ({ yaw_deg: msg.yaw_rad * 180 / Math.PI })
     }
   }
 };
@@ -173,103 +170,6 @@ export const config: Entity = {
               y: 4,
               tabs: {
                 items: {
-                  sampleWidget: {
-                    label: "Sample Widget",
-                    widget: {
-                      props: {
-                        speedLabel: "Sample Speed (m/s)",
-                      },
-                      name: "sample", config: {
-                        speed: {
-                          type: "subscriber",
-                          topic: speedTopic,
-                          topicField: ".data",
-                          topicWrapper: speedTopicWrapper,
-                        },
-                        speedMultiplier: {
-                          type: "constant",
-                          constant: 0.1,
-                        },
-                        reset: {
-                          type: "service",
-                          service: { name: "/reset", type: "std_srvs/srv/Trigger" }
-                        },
-                        setSpeed: {
-                          type: "publisher",
-                          topic: targetSpeedTopic,
-                          topicField: ".data",
-                          topicWrapper: targetSpeedTopicWrapper,
-                        },
-                        targetSpeed: {
-                          type: "subscriber",
-                          topic: targetSpeedTopic,
-                          topicField: ".data"
-                        }
-                      }
-                    }
-                  },
-                  actions: {
-                    label: "Actions",
-                    grids: {
-                      horizontal: 1,
-                      vertical: 2,
-                      items: {
-                        actuator1: {
-                          height: 1,
-                          width: 1,
-                          x: 0,
-                          y: 0,
-                          label: "Actuator",
-                          widget: {
-                            props: { label: "Servo Angle", units: "deg" },
-                            name: "actuator",
-                            config: {
-                              min: { type: "constant", constant: -20 },
-                              max: { type: "constant", constant: 20 },
-                              setSpeed: {
-                                type: "publisher",
-                                topic: targetSpeedTopic,
-                              },
-                              feedback: {
-                                type: "subscriber",
-                                topic: speedTopic,
-                                topicField: ".data"
-                              }
-                            }
-                          }
-                        },
-                        actuator2: {
-                          height: 1,
-                          width: 1,
-                          x: 0,
-                          y: 1,
-                          label: "Actuator",
-                          widget: {
-                            props: { label: "Servo Angle", units: "deg" },
-                            name: "actuator",
-                            config: {
-                              min: { type: "constant", constant: -20 },
-                              max: { type: "constant", constant: 20 },
-                              decimal: { type: "constant", constant: 3 },
-                              setSpeed: {
-                                type: "publisher",
-                                topic: targetSpeedTopic,
-                              },
-                              feedback: {
-                                type: "subscriber",
-                                topic: speedTopic,
-                                topicField: ".data"
-                              }
-                            }
-                          }
-                        },
-                      }
-                    }
-                  },
-                  healthCheck: {
-                    label: "Health Check",
-                    widget: { name: "action", config: {} }
-                  },
                   gauges: {
                     label: "Gauges",
                     grids: {
@@ -298,21 +198,6 @@ export const config: Entity = {
                 }
               }
             }
-          }
-        }
-      },
-      settings: {
-        label: "Settings",
-        widget: {
-          name: "settings", config: {
-            setParams: {
-              type: "service",
-              service: {name: "/reset_service_node/set_parameters", type: "rcl_interfaces/srv/SetParameters"}
-            },
-            getParams: {
-              type: "service",
-              service: {name: "/reset_service_node/get_parameters", type: "rcl_interfaces/srv/GetParameters"}
-            },
           }
         }
       },

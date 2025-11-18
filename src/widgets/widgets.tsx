@@ -3,7 +3,6 @@ import React from "react";
 import { HUDWidget } from "./HUDWidget";
 import { MapWidget } from "./MapWidget";
 import { SampleWidget } from "./SampleWidget";
-import { GaugeWidget } from "./GaugeWidget";
 import { ActuatorWidget } from "./ActuatorWidget";
 import { SettingsWidget } from "./SettingsWidget";
 import { ROSParametersWidget } from "./ROSParametersWidget";
