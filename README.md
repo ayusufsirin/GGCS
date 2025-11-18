@@ -76,3 +76,9 @@ docker exec -it ggcs-rosbridge /bin/bash -c \
   'source /opt/ros/humble/setup.bash && \
    ros2 topic pub /gps sensor_msgs/msg/NavSatFix "{latitude: 36.000, longitude: 42.000, altitude: 10.5}"'
 ```
+
+```bash
+docker exec -it ggcs-rosbridge /bin/bash -c \
+  'source /opt/ros/humble/setup.bash && \
+   ros2 topic pub /relay/state std_msgs/msg/Bool "{data: false}"'
+```

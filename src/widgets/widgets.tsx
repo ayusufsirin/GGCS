@@ -7,6 +7,7 @@ import { ActuatorWidget } from "./ActuatorWidget";
 import { SettingsWidget } from "./SettingsWidget";
 import { ROSParametersWidget } from "./ROSParametersWidget";
 import { GaugeWidget } from "./GaugeWidget";
+import { StatusWidget } from "./StatusWidget";
 
 export const WIDGETS: Record<string, React.ComponentType<any>> = {
   hud: HUDWidget,
@@ -16,4 +17,5 @@ export const WIDGETS: Record<string, React.ComponentType<any>> = {
   actuator: ActuatorWidget,
   settings: SettingsWidget, // <-- add if you have it
   rosParameters: ROSParametersWidget,
+  status: StatusWidget,
 };
