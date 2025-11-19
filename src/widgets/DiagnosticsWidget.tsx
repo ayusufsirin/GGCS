@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useAttr } from "../middleware/hooks/use-attr";
+import { Property } from "csstype";
 
 // Minimal ROS 2 diagnostics types (only what we need)
 type KeyValue = { key: string; value: string };
@@ -35,6 +36,8 @@ export function DiagnosticsWidget(props: Props) {
 
   // Keep last-seen maps per diagnostic name: name -> (key -> value)
   const [byName, setByName] = useState<Record<string, Record<string, string>>>({});
+  const [levelColor, setLevelColorColor] = useState<Property.Color>("grey");
+  const [summary, setSummary] = useState<string>("No diagnostics received yet");
 
   useEffect(() => {
     const msg = diagnosticsMsg as DiagnosticArray | undefined;
@@ -45,6 +48,23 @@ export function DiagnosticsWidget(props: Props) {
       for (const st of msg.status) {
         if (!st?.name) continue;
         if (!names.includes(st.name)) continue; // only track selected names
+        setSummary(st.message);
+        switch (st.level) {
+          case 0:
+            setLevelColorColor("green");
+            break;
+          case 1:
+            setLevelColorColor("yellow");
+            break;
+          case 2:
+            setLevelColorColor("red");
+            break;
+          case 3:
+            setLevelColorColor("cyan");
+            break;
+          default:
+            setLevelColorColor("grey");
+        }
         const kvMap = { ...(next[st.name] ?? {}) };
         for (const kv of st.values ?? []) {
           if (!kv?.key) continue;
@@ -95,18 +115,17 @@ export function DiagnosticsWidget(props: Props) {
             <tr>
               <th style={thStyle}>Key</th>
               {names.map((n) => (
-                <th style={thStyle} key={n}>{n}</th>
+                <th style={{ ...thStyle, color: levelColor}} key={n}>{n}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {allKeys.length === 0 ? (
-              <tr>
-                <td style={tdStyle} colSpan={Math.max(1, names.length + 1)}>
-                  No diagnostics received yet
-                </td>
-              </tr>
-            ) : (
+            <tr>
+              <td style={tdStyle} colSpan={Math.max(1, names.length + 1)}>
+                <i><strong>{summary}</strong></i>
+              </td>
+            </tr>
+            {allKeys.length !== 0 && (
               allKeys.map((key) => (
                 <tr key={key}>
                   <td style={tdStyle}><code>{key}</code></td>
@@ -116,8 +135,8 @@ export function DiagnosticsWidget(props: Props) {
                     </td>
                   ))}
                 </tr>
-              ))
-            )}
+              )))
+            }
           </tbody>
         </table>
       </div>
