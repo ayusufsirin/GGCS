@@ -450,6 +450,21 @@ export const config: Entity = {
             }
           }
         }
+      },
+      diagnostics: {
+        label: "Diagnostics",
+        widget: {
+          name: "diagnostics",
+          props: {
+            names: ["imu", "battery", "gps"] // columns by DiagnosticStatus.name
+          },
+          config: {
+            diagnostics: {
+              type: "subscriber",
+              topic: { name: "/diagnostics", type: "diagnostic_msgs/msg/DiagnosticArray" },
+            }
+          }
+        }
       }
     }
   }
