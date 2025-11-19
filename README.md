@@ -8,6 +8,23 @@
 npx create-react-app ggcs --template typescript
 ```
 
+## Production 
+
+### Build
+
+```bash
+docker build . -t ggcs-react-prod -f react.prod.Dockerfile \
+--build-arg REACT_APP_GGCS_ROSBRIDGE_URL=ws://localhost:9090
+docker save ggcs-react-prod > ggcs-react-prod.tar
+```
+
+### Run (serves on port 80)
+
+```bash
+docker load < ggcs-react-prod.tar
+docker run --restart always -d -p 8080:80 ggcs-react-prod
+```
+
 ## Running the Application
 
 ```bash
