@@ -1,10 +1,14 @@
 import { Entity, Topic, Widget } from "./interfaces";
 
 import {
-  CheckCircle2,
+  Bubbles,
+  LocateFixed,
+  Magnet,
+  MapPinCheckInside,
   Power,
+  Rotate3D,
   Satellite,
-  XCircle,
+  ShipWheel
 } from "lucide-react";
 
 const arnavINSTopic: Topic = {
@@ -17,32 +21,9 @@ const speedTopic: Topic = {
   type: "std_msgs/msg/Float64"
 };
 
-const targetSpeedTopic: Topic = {
-  name: "/target_speed",
-  type: "std_msgs/msg/Float64"
-}
-
 const accelTopic: Topic = {
   name: "/accel",
   type: "std_msgs/msg/Float64"
-};
-
-const gpsTopic: Topic = {
-  name: "/gps",
-  type: "sensor_msgs/msg/NavSatFix"
-};
-
-const speedTopicWrapper = (msg: unknown) => {
-  // msg is the full ROS message; extract and transform
-  const data = (msg as any)?.data;
-  const newData = (typeof data === "number") ? (data * 180) / Math.PI : data;
-  return { data: newData, deg: newData, rad: data };
-};
-
-const targetSpeedTopicWrapper = (msg: unknown) => {
-  const data = (msg as any)?.data;
-  const newData = (typeof data === "number") ? (data * 180) / Math.PI : data;
-  return { data: newData, deg: newData, rad: data };
 };
 
 const hudWidget: Widget = {
@@ -173,7 +154,7 @@ export const config: Entity = {
               label: "GPS Status",
               width: 1,
               height: 1,
-              x: 0,
+              x: 7,
               y: 4,
               widget: {
                 name: "status",
@@ -196,14 +177,45 @@ export const config: Entity = {
                 config: {
                   gpsSatellites: {
                     type: "subscriber",
-                    topic: gpsTopic,
-                    topicField: ".status.status"
+                    topic: {
+                      name: "/arnav/satellites", type: "std_msgs/msg/Int64"
+                    },
+                    topicField: ".data"
                   },
                 }
               }
             },
-            relayStatus: {
-              label: "Relay Status",
+            rtkSystemStatus: {
+              label: "RTK System Status",
+              width: 1,
+              height: 1,
+              x: 0,
+              y: 4,
+              widget: {
+                name: "status",
+                props: {
+                  // label: "Relay",
+                  kind: "boolean",
+                  valueAttr: "status",
+                  icon: Power,
+                  onText: "OK",
+                  offText: "ERR",
+                  onColor: "#0E9F6E",
+                  offColor: "#D14343",
+                  hint: "System OK",
+                  dense: true,
+                },
+                config: {
+                  status: {
+                    type: "subscriber",
+                    topic: arnavINSTopic,
+                    topicField: ".status.system_ok", // boolean
+                  }
+                }
+              }
+            },
+            rtkRollPitchStatus: {
+              label: "RTK Roll Pitch Status",
               width: 1,
               height: 1,
               x: 1,
@@ -213,24 +225,166 @@ export const config: Entity = {
                 props: {
                   // label: "Relay",
                   kind: "boolean",
-                  valueAttr: "relayA",
-                  icon: Power,
-                  onText: "ON",
-                  offText: "OFF",
+                  valueAttr: "status",
+                  icon: Rotate3D,
+                  onText: "OK",
+                  offText: "ERR",
                   onColor: "#0E9F6E",
                   offColor: "#D14343",
-                  onIcon: CheckCircle2,
-                  offIcon: XCircle,
-                  hint: "Channel A",
+                  hint: "Roll/Pitch OK",
                   dense: true,
                 },
                 config: {
-                  relayA: {
+                  status: {
                     type: "subscriber",
-                    topic: { name: "/relay/state", type: "std_msgs/msg/Bool" },
-                    topicField: ".data", // boolean
-                  },
-
+                    topic: arnavINSTopic,
+                    topicField: ".status.roll_pitch_ok", // boolean
+                  }
+                }
+              }
+            },
+            rtkYawStatus: {
+              label: "RTK Yaw Status",
+              width: 1,
+              height: 1,
+              x: 2,
+              y: 4,
+              widget: {
+                name: "status",
+                props: {
+                  // label: "Relay",
+                  kind: "boolean",
+                  valueAttr: "status",
+                  icon: ShipWheel,
+                  onText: "OK",
+                  offText: "ERR",
+                  onColor: "#0E9F6E",
+                  offColor: "#D14343",
+                  hint: "Yaw OK",
+                  dense: true,
+                },
+                config: {
+                  status: {
+                    type: "subscriber",
+                    topic: arnavINSTopic,
+                    topicField: ".status.yaw_ok", // boolean
+                  }
+                }
+              }
+            },
+            rtkPosVelStatus: {
+              label: "RTK Pos/Vel Status",
+              width: 1,
+              height: 1,
+              x: 3,
+              y: 4,
+              widget: {
+                name: "status",
+                props: {
+                  // label: "Relay",
+                  kind: "boolean",
+                  valueAttr: "status",
+                  icon: MapPinCheckInside,
+                  onText: "OK",
+                  offText: "ERR",
+                  onColor: "#0E9F6E",
+                  offColor: "#D14343",
+                  hint: "Pos/Vel OK",
+                  dense: true,
+                },
+                config: {
+                  status: {
+                    type: "subscriber",
+                    topic: arnavINSTopic,
+                    topicField: ".status.pos_vel_ok", // boolean
+                  }
+                }
+              }
+            },
+            rtkMagStatus: {
+              label: "RTK Magnetometer Status",
+              width: 1,
+              height: 1,
+              x: 4,
+              y: 4,
+              widget: {
+                name: "status",
+                props: {
+                  // label: "Relay",
+                  kind: "boolean",
+                  valueAttr: "status",
+                  icon: Magnet,
+                  onText: "OK",
+                  offText: "ERR",
+                  onColor: "#0E9F6E",
+                  offColor: "#D14343",
+                  hint: "Mag OK",
+                  dense: true,
+                },
+                config: {
+                  status: {
+                    type: "subscriber",
+                    topic: arnavINSTopic,
+                    topicField: ".status.mag_ok", // boolean
+                  }
+                }
+              }
+            },
+            rtkGnssStatus: {
+              label: "RTK GNSS Status",
+              width: 1,
+              height: 1,
+              x: 5,
+              y: 4,
+              widget: {
+                name: "status",
+                props: {
+                  // label: "Relay",
+                  kind: "boolean",
+                  valueAttr: "status",
+                  icon: LocateFixed,
+                  onText: "Fixed",
+                  offText: "No Fix",
+                  onColor: "#0E9F6E",
+                  offColor: "#D14343",
+                  hint: "GNSS Fixed",
+                  dense: true,
+                },
+                config: {
+                  status: {
+                    type: "subscriber",
+                    topic: arnavINSTopic,
+                    topicField: ".status.gnss_fixed", // boolean
+                  }
+                }
+              }
+            },
+            rtkRtkStatus: {
+              label: "RTK Float/Fixed Status",
+              width: 1,
+              height: 1,
+              x: 6,
+              y: 4,
+              widget: {
+                name: "status",
+                props: {
+                  // label: "Relay",
+                  kind: "boolean",
+                  valueAttr: "status",
+                  icon: Bubbles,
+                  onText: "Fixed",
+                  offText: "Floating",
+                  onColor: "#0E9F6E",
+                  offColor: "#D14343",
+                  hint: "RTK Fixed",
+                  dense: true,
+                },
+                config: {
+                  status: {
+                    type: "subscriber",
+                    topic: arnavINSTopic,
+                    topicField: ".status.gnss_fixed", // boolean
+                  }
                 }
               }
             },
