@@ -9,6 +9,7 @@ import { ROSParametersWidget } from "./ROSParametersWidget";
 import { GaugeWidget } from "./GaugeWidget";
 import { StatusWidget } from "./StatusWidget";
 import { DiagnosticsWidget } from "./DiagnosticsWidget";
+import { ServiceWidget } from "./ServiceWidget";
 
 export const WIDGETS: Record<string, React.ComponentType<any>> = {
   hud: HUDWidget,
@@ -20,4 +21,5 @@ export const WIDGETS: Record<string, React.ComponentType<any>> = {
   rosParameters: ROSParametersWidget,
   status: StatusWidget,
   diagnostics: DiagnosticsWidget,
+  service: ServiceWidget,
 };
