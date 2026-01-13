@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css"; // Ensure Leaflet CSS is loaded
 import { Circle, LayersControl, MapContainer, Marker, Polyline, TileLayer, useMap } from "react-leaflet";
 import L, { DivIcon, LatLngExpression, Marker as LeafletMarker } from "leaflet";
+import "leaflet-rotatedmarker";
 import { useAttr } from "../middleware/hooks/use-attr";
 import homeIconUrl from "./images/map/home_icon.png";
 import vehicleIconUrl from "./images/map/vehicle_icon.png";
@@ -23,10 +24,11 @@ function waypointIcon(index: number): DivIcon {
 }
 
 type Props = {
-  initialZoom: number
+  initialZoom: number,
+  maxZoom: number
 }
 
-export function MapWidget({ initialZoom = DEFAULT_ZOOM }: Props) {
+export function MapWidget({ initialZoom = DEFAULT_ZOOM, maxZoom = DEFAULT_MAX_ZOOM }: Props) {
   // ---- Widget attributes ----
   const lat = useAttr<number>("latitude");      // degrees
   const lon = useAttr<number>("longitude");     // degrees
@@ -37,7 +39,6 @@ export function MapWidget({ initialZoom = DEFAULT_ZOOM }: Props) {
   const waypointsUrl = useAttr<string>("waypointsUrl") ?? "/waypoints";
   // const vehicleIconUrl = useAttr<string>("vehicleIconUrl") ?? "./images/map/vehicle_icon.png";
   // const homeIconUrl = useAttr<string>("homeIconUrl") ?? "./images/map/home_icon.png";
-  const maxZoom = useAttr<number>("maxZoom") ?? DEFAULT_MAX_ZOOM;
   const maxPathLength = useAttr<number>("maxPathLength") ?? DEFAULT_PATH_LEN;
 
   const centerLat = useAttr<number>("centerLat") ?? (DEFAULT_CENTER as number[])[0];

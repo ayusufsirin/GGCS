@@ -15,10 +15,6 @@ RUN npm ci
 COPY src ./src
 COPY public ./public
 
-# Build argument for ROS bridge URL
-ARG REACT_APP_GGCS_ROSBRIDGE_URL=ws://10.0.0.50:9090
-ENV REACT_APP_GGCS_ROSBRIDGE_URL=${REACT_APP_GGCS_ROSBRIDGE_URL}
-
 # Build the app
 RUN npm run build
 

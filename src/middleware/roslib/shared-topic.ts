@@ -25,7 +25,7 @@ class SharedTopicRegistry {
     const k = tkey(t);
     let e = this.entries.get(k);
     if (!e) {
-      const topic = new ROSLIB.Topic({ ros: this.ros, name: t.name, messageType: t.type });
+      const topic = new ROSLIB.Topic({ ros: this.ros, name: t.name, messageType: t.type, throttle_rate: 100 });
       const cbs = new Set<Listener>();
       const handler = (msg: any) => {
         for (const fn of Array.from(cbs)) fn(msg);

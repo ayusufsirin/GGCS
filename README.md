@@ -14,7 +14,14 @@ npx create-react-app ggcs --template typescript
 
 ```bash
 docker build . -t ggcs-react-prod -f react.prod.Dockerfile \
---build-arg REACT_APP_GGCS_ROSBRIDGE_URL=ws://localhost:9090
+    --platform linux/arm64 \
+    --build-arg REACT_APP_GGCS_ROSBRIDGE_URL=ws://10.42.0.1:9090
+docker save ggcs-react-prod > ggcs-react-prod.tar
+```
+
+```bash
+docker build . -t ggcs-react-prod -f react.prod.Dockerfile \
+    --platform linux/arm64
 docker save ggcs-react-prod > ggcs-react-prod.tar
 ```
 

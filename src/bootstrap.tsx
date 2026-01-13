@@ -23,7 +23,7 @@ function WidgetFrame({ instanceId, name, props }: { instanceId: string; name: st
 
 // ---------- Recursive node renderer ----------
 function RenderNode({ node, path }: { node: Entity; path: string[] }) {
-  console.debug("RenderNode", path, node);
+  // console.debug("RenderNode", path, node);
   // Precedence: tabs > grids > widget
   if (node?.tabs?.items) {
     return <TabsView tabs={node.tabs.items} path={path} />;

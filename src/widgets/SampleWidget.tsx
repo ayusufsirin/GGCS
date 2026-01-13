@@ -8,7 +8,7 @@ type Props = {
 };
 
 export function SampleWidget({ speedLabel }: Props) {
-  console.log("SampleWidget", speedLabel);
+  // console.log("SampleWidget", speedLabel);
 
   const speed = useAttr<number>("speed");
   const speedMultiplier = useAttr<number>("speedMultiplier");

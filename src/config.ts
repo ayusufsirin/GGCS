@@ -11,19 +11,62 @@ import {
   ShipWheel
 } from "lucide-react";
 
-const arnavINSTopic: Topic = {
-  name: "/ArdicLabs/Arnav/Gnss_Ins_data",
-  type: "ardiclabs_arnav_msgs/msg/Ins"
-}
-
-const speedTopic: Topic = {
-  name: "/speed",
-  type: "std_msgs/msg/Float64"
+const arnavINSTopic: Topic = { name: "/ArdicLabs/Arnav/Gnss_Ins_data", type: "ardiclabs_arnav_msgs/msg/Ins" };
+const arnavIMUTopic: Topic = { name: "/ins/imu", type: "sensor_msgs/msg/Imu" };
+const ekfOdomTopic: Topic = { name: "/odometry/filtered", type: "nav_msgs/msg/Odometry" };
+const diagnosticsTopic: Topic = { name: "/diagnostics", type: "diagnostic_msgs/msg/DiagnosticArray" };
+const speedTopic: Topic = { name: "/speed", type: "std_msgs/msg/Float64" };
+const accelTopic: Topic = { name: "/accel", type: "std_msgs/msg/Float64" };
+const zedRgbTopic: Topic = {
+  name: "/zed/zed_node/rgb/color/rect/image/compressed",
+  type: "sensor_msgs/msg/CompressedImage"
+};
+const zedDepthTopic: Topic = {
+  name: "/zed/zed_node/depth/depth_registered/compressedDepth",
+  type: "sensor_msgs/msg/CompressedImage"
 };
 
-const accelTopic: Topic = {
-  name: "/accel",
-  type: "std_msgs/msg/Float64"
+const quatToRPY = (qx: number, qy: number, qz: number, qw: number) => {
+  // roll (x-axis rotation)
+  const sinr_cosp = 2 * (qw * qx + qy * qz);
+  const cosr_cosp = 1 - 2 * (qx * qx + qy * qy);
+  const roll = Math.atan2(sinr_cosp, cosr_cosp);
+
+  // pitch (y-axis rotation)
+  const sinp = 2 * (qw * qy - qz * qx);
+  const pitch = Math.abs(sinp) >= 1 ? Math.sign(sinp) * (Math.PI / 2) : Math.asin(sinp);
+
+  // yaw (z-axis rotation)
+  const siny_cosp = 2 * (qw * qz + qx * qy);
+  const cosy_cosp = 1 - 2 * (qy * qy + qz * qz);
+  const yaw = Math.atan2(siny_cosp, cosy_cosp);
+
+  return { roll, pitch, yaw };
+};
+
+const rad2deg = (r: number) => r * 180 / Math.PI;
+
+const imuWrapper = (msg: any) => {
+  // adapt these field names to your message
+  const { roll, pitch, yaw } = quatToRPY(msg.orientation.x, msg.orientation.y, msg.orientation.z, msg.orientation.w);
+  return {
+    roll_rad: roll, pitch_rad: pitch, yaw_rad: yaw,
+    roll_deg: rad2deg(roll), pitch_deg: rad2deg(pitch), yaw_deg: rad2deg(yaw),
+  };
+};
+
+const odomWrapper = (msg: any) => {
+  // adapt these field names to your message
+  const { roll, pitch, yaw } = quatToRPY(
+    msg.pose.pose.orientation.x,
+    msg.pose.pose.orientation.y,
+    msg.pose.pose.orientation.z,
+    msg.pose.pose.orientation.w
+  );
+  return {
+    roll_rad: roll, pitch_rad: pitch, yaw_rad: yaw,
+    roll_deg: rad2deg(roll), pitch_deg: rad2deg(pitch), yaw_deg: rad2deg(yaw),
+  };
 };
 
 const hudWidget: Widget = {
@@ -46,6 +89,74 @@ const hudWidget: Widget = {
       topic: arnavINSTopic,
       topicField: ".yaw_deg",
       topicWrapper: (msg: any) => ({ yaw_deg: msg.yaw_rad * 180 / Math.PI })
+    },
+    speed: {
+      type: "subscriber",
+      topic: speedTopic,
+      topicField: ".data"
+    },
+    altitude: {
+      type: "subscriber",
+      topic: arnavINSTopic,
+      topicField: ".h_m"
+    }
+  }
+};
+
+const hudWidget2: Widget = {
+  name: "hud",
+  config: {
+    roll: {
+      type: "subscriber",
+      topic: arnavIMUTopic,
+      topicField: ".roll_deg",
+      topicWrapper: imuWrapper
+    },
+    pitch: {
+      type: "subscriber",
+      topic: arnavIMUTopic,
+      topicField: ".pitch_deg",
+      topicWrapper: imuWrapper
+    },
+    heading: {
+      type: "subscriber",
+      topic: arnavIMUTopic,
+      topicField: ".yaw_deg",
+      topicWrapper: imuWrapper
+    },
+    speed: {
+      type: "subscriber",
+      topic: speedTopic,
+      topicField: ".data"
+    },
+    altitude: {
+      type: "subscriber",
+      topic: arnavINSTopic,
+      topicField: ".h_m"
+    }
+  }
+};
+
+const hudWidget3: Widget = {
+  name: "hud",
+  config: {
+    roll: {
+      type: "subscriber",
+      topic: ekfOdomTopic,
+      topicField: ".roll_deg",
+      topicWrapper: odomWrapper
+    },
+    pitch: {
+      type: "subscriber",
+      topic: ekfOdomTopic,
+      topicField: ".pitch_deg",
+      topicWrapper: odomWrapper
+    },
+    heading: {
+      type: "subscriber",
+      topic: ekfOdomTopic,
+      topicField: ".yaw_deg",
+      topicWrapper: odomWrapper
     },
     speed: {
       type: "subscriber",
@@ -88,6 +199,34 @@ const mapWidget: Widget = {
   }
 };
 
+const mapWidget2: Widget = {
+  name: "map",
+  props: {
+    initialZoom: 20,
+    maxZoom: 24
+  },
+  config: {
+    latitude: {
+      type: "subscriber",
+      topic: arnavINSTopic,
+      topicField: ".lat_deg",
+      topicWrapper: (msg: any) => ({ lat_deg: msg.lat_rad * 180 / Math.PI })
+    },
+    longitude: {
+      type: "subscriber",
+      topic: arnavINSTopic,
+      topicField: ".lon_deg",
+      topicWrapper: (msg: any) => ({ lon_deg: msg.lon_rad * 180 / Math.PI })
+    },
+    heading: {
+      type: "subscriber",
+      topic: arnavIMUTopic,
+      topicField: ".yaw_deg",
+      topicWrapper: imuWrapper
+    }
+  }
+};
+
 const speedGaugeWidget: Widget = {
   name: "gauge",
   props: {
@@ -125,6 +264,12 @@ const accelGaugeWidget: Widget = {
   }
 };
 
+function timestamp(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}_${pad(d.getMonth() + 1)}_${pad(d.getDate())}-${pad(d.getHours())}_${pad(d.getMinutes())}_${pad(d.getSeconds())}`;
+}
+
 export const config: Entity = {
   tabs: {
     items: {
@@ -136,19 +281,43 @@ export const config: Entity = {
           items: {
             map: {
               label: "Map",
-              width: 16,
-              height: 12,
+              width: 8,
+              height: 8,
               x: 8,
-              y: 0,
+              y: 4,
               widget: mapWidget
             },
-            hud: {
+            map2: {
+              label: "Map",
+              width: 8,
+              height: 8,
+              x: 16,
+              y: 4,
+              widget: mapWidget2
+            },
+            hud3: {
               label: "HUD",
               width: 8,
               height: 4,
               x: 0,
               y: 0,
+              widget: hudWidget3
+            },
+            hud: {
+              label: "HUD",
+              width: 8,
+              height: 4,
+              x: 8,
+              y: 0,
               widget: hudWidget
+            },
+            hud2: {
+              label: "HUD",
+              width: 8,
+              height: 4,
+              x: 16,
+              y: 0,
+              widget: hudWidget2
             },
             gpsStatus: {
               label: "GPS Status",
@@ -420,6 +589,114 @@ export const config: Entity = {
                         },
                       }
                     }
+                  },
+                  actions: {
+                    label: "Actions",
+                    grids: {
+                      horizontal: 2,
+                      vertical: 2,
+                      items: {
+                        zedStartSvo: {
+                          label: "Start SVO",
+                          width: 1,
+                          height: 1,
+                          x: 0,
+                          y: 0,
+                          widget: {
+                            name: "service",
+                            props: {
+                              buttonLabel: "Start SVO",
+                              buttonPendingLabel: "Starting",
+                              requestParams: {
+                                target_framerate: 10,
+                                svo_filename: `/home/neurolab/SensorSystemROS2/ros_ws_host/zed_${timestamp()}.svo2`
+                              }
+                            },
+                            config: {
+                              callService: {
+                                type: "service",
+                                service: {
+                                  name: "/zed/zed_node/start_svo_rec",
+                                  type: "zed_msgs/srv/StartSvoRec",
+                                }
+                              }
+                            }
+                          }
+                        },
+                        zedStopSvo: {
+                          label: "Stop SVO",
+                          width: 1,
+                          height: 1,
+                          x: 1,
+                          y: 0,
+                          widget: {
+                            name: "service",
+                            props: {
+                              buttonLabel: "Stop SVO",
+                              buttonPendingLabel: "Stopping",
+                              requestParams: {}
+                            },
+                            config: {
+                              callService: {
+                                type: "service",
+                                service: {
+                                  name: "/zed/zed_node/stop_svo_rec",
+                                  type: "std_srvs/srv/Trigger",
+                                }
+                              }
+                            }
+                          }
+                        },
+                        bagStartRecord: {
+                          label: "Start ROS Bag",
+                          width: 1,
+                          height: 1,
+                          x: 0,
+                          y: 1,
+                          widget: {
+                            name: "service",
+                            props: {
+                              buttonLabel: "Start ROS Bag",
+                              buttonPendingLabel: "Starting",
+                              requestParams: {}
+                            },
+                            config: {
+                              callService: {
+                                type: "service",
+                                service: {
+                                  name: "/bag_recorder/start_bag_recording",
+                                  type: "std_srvs/srv/Trigger",
+                                }
+                              }
+                            }
+                          }
+                        },
+                        bagStopRecord: {
+                          label: "Stop ROS Bag",
+                          width: 1,
+                          height: 1,
+                          x: 1,
+                          y: 1,
+                          widget: {
+                            name: "service",
+                            props: {
+                              buttonLabel: "Stop ROS Bag",
+                              buttonPendingLabel: "Stopping",
+                              requestParams: {}
+                            },
+                            config: {
+                              callService: {
+                                type: "service",
+                                service: {
+                                  name: "/bag_recorder/stop_bag_recording",
+                                  type: "std_srvs/srv/Trigger",
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -427,6 +704,102 @@ export const config: Entity = {
           }
         }
       },
+      images: {
+        label: "Images",
+        grids: {
+          horizontal: 3,
+          vertical: 2,
+          items: {
+            zedRgb: {
+              label: "ZED RGB",
+              height: 1,
+              width: 1,
+              x: 0,
+              y: 0,
+              widget: {
+                name: "image",
+                props: {
+                  label: "ZED RGB Image",
+                },
+                config: {
+                  image: {
+                    type: "subscriber",
+                    topic: zedRgbTopic,
+                    topicField: ".data",
+                  }
+                }
+              }
+            },
+            // zedDepth: {
+            //   label: "ZED Depth",
+            //   height: 1,
+            //   width: 1,
+            //   x: 1,
+            //   y: 0,
+            //   widget: {
+            //     name: "image",
+            //     props: {
+            //       label: "ZED Depth Image",
+            //     },
+            //     config: {
+            //       image: {
+            //         type: "subscriber",
+            //         topic: zedDepthTopic,
+            //         topicField: ".data",
+            //       }
+            //     }
+            //   }
+            // },
+          }
+        }
+      },
+      // diagnostics: {
+      //   label: "Diagnostics",
+      //   grids: {
+      //     horizontal: 2,
+      //     vertical: 1,
+      //     items: {
+      //       rtkLowRate: {
+      //         label: "RTK Low Rate",
+      //         height: 1,
+      //         width: 1,
+      //         x: 0,
+      //         y: 0,
+      //         widget: {
+      //           name: "diagnostics",
+      //           props: {
+      //             names: ["arnav_serial: Low Rate Messages"] // columns by DiagnosticStatus.name
+      //           },
+      //           config: {
+      //             diagnostics: {
+      //               type: "subscriber",
+      //               topic: diagnosticsTopic,
+      //             }
+      //           }
+      //         }
+      //       },
+      //       rtkStatus: {
+      //         label: "RTK Status",
+      //         height: 1,
+      //         width: 1,
+      //         x: 1,
+      //         y: 0,
+      //         widget: {
+      //           name: "diagnostics",
+      //           props: {
+      //             names: ["arnav_serial: Status"] // columns by DiagnosticStatus.name
+      //           },
+      //           config: {
+      //             diagnostics: {
+      //               type: "subscriber",
+      //               topic: diagnosticsTopic,
+      //             }
+      //           }
+      //         }
+      //       }
+      //     }
+      //   }
+      // },
       rosParameters: {
         label: "ROS Parameters",
         widget: {
@@ -447,21 +820,6 @@ export const config: Entity = {
             setParam: {
               type: "service",
               service: { name: "/rosapi/set_param", type: "rosapi/SetParam" }
-            }
-          }
-        }
-      },
-      diagnostics: {
-        label: "Diagnostics",
-        widget: {
-          name: "diagnostics",
-          props: {
-            names: ["imu", "battery", "gps"] // columns by DiagnosticStatus.name
-          },
-          config: {
-            diagnostics: {
-              type: "subscriber",
-              topic: { name: "/diagnostics", type: "diagnostic_msgs/msg/DiagnosticArray" },
             }
           }
         }

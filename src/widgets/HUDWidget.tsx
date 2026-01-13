@@ -50,7 +50,7 @@ function HUD(props: {
 }) {
   const { ref, width, height } = useElementSize<HTMLDivElement>();
 
-  console.debug(ref, width, height);
+  // console.debug(ref, width, height);
 
   return (
     <div
