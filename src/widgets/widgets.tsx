@@ -3,10 +3,13 @@ import React from "react";
 import { HUDWidget } from "./HUDWidget";
 import { MapWidget } from "./MapWidget";
 import { SampleWidget } from "./SampleWidget";
+import { SettingsWidget } from "./SettingsWidget";
+import { ROSParametersWidget } from "./ROSParametersWidget";
 
 export const WIDGETS: Record<string, React.ComponentType<any>> = {
   hud: HUDWidget,
   map: MapWidget,
   sample: SampleWidget,
-  // settings: SettingsWidget, // <-- add if you have it
+  settings: SettingsWidget, // <-- add if you have it
+  rosParameters: ROSParametersWidget,
 };
