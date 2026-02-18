@@ -12,9 +12,6 @@ import {
 } from "lucide-react";
 
 const arnavINSTopic: Topic = { name: "/ArdicLabs/Arnav/Gnss_Ins_data", type: "ardiclabs_arnav_msgs/msg/Ins" };
-const arnavIMUTopic: Topic = { name: "/ins/imu", type: "sensor_msgs/msg/Imu" };
-const ekfOdomTopic: Topic = { name: "/odometry/filtered", type: "nav_msgs/msg/Odometry" };
-const diagnosticsTopic: Topic = { name: "/diagnostics", type: "diagnostic_msgs/msg/DiagnosticArray" };
 const speedTopic: Topic = { name: "/speed", type: "std_msgs/msg/Float64" };
 const accelTopic: Topic = { name: "/accel", type: "std_msgs/msg/Float64" };
 const zedRgbTopic: Topic = {
@@ -103,74 +100,6 @@ const hudWidget: Widget = {
   }
 };
 
-const hudWidget2: Widget = {
-  name: "hud",
-  config: {
-    roll: {
-      type: "subscriber",
-      topic: arnavIMUTopic,
-      topicField: ".roll_deg",
-      topicWrapper: imuWrapper
-    },
-    pitch: {
-      type: "subscriber",
-      topic: arnavIMUTopic,
-      topicField: ".pitch_deg",
-      topicWrapper: imuWrapper
-    },
-    heading: {
-      type: "subscriber",
-      topic: arnavIMUTopic,
-      topicField: ".yaw_deg",
-      topicWrapper: imuWrapper
-    },
-    speed: {
-      type: "subscriber",
-      topic: speedTopic,
-      topicField: ".data"
-    },
-    altitude: {
-      type: "subscriber",
-      topic: arnavINSTopic,
-      topicField: ".h_m"
-    }
-  }
-};
-
-const hudWidget3: Widget = {
-  name: "hud",
-  config: {
-    roll: {
-      type: "subscriber",
-      topic: ekfOdomTopic,
-      topicField: ".roll_deg",
-      topicWrapper: odomWrapper
-    },
-    pitch: {
-      type: "subscriber",
-      topic: ekfOdomTopic,
-      topicField: ".pitch_deg",
-      topicWrapper: odomWrapper
-    },
-    heading: {
-      type: "subscriber",
-      topic: ekfOdomTopic,
-      topicField: ".yaw_deg",
-      topicWrapper: odomWrapper
-    },
-    speed: {
-      type: "subscriber",
-      topic: speedTopic,
-      topicField: ".data"
-    },
-    altitude: {
-      type: "subscriber",
-      topic: arnavINSTopic,
-      topicField: ".h_m"
-    }
-  }
-};
-
 const mapWidget: Widget = {
   name: "map",
   props: {
@@ -195,34 +124,6 @@ const mapWidget: Widget = {
       topic: arnavINSTopic,
       topicField: ".yaw_deg",
       topicWrapper: (msg: any) => ({ yaw_deg: msg.yaw_rad * 180 / Math.PI })
-    }
-  }
-};
-
-const mapWidget2: Widget = {
-  name: "map",
-  props: {
-    initialZoom: 20,
-    maxZoom: 24
-  },
-  config: {
-    latitude: {
-      type: "subscriber",
-      topic: arnavINSTopic,
-      topicField: ".lat_deg",
-      topicWrapper: (msg: any) => ({ lat_deg: msg.lat_rad * 180 / Math.PI })
-    },
-    longitude: {
-      type: "subscriber",
-      topic: arnavINSTopic,
-      topicField: ".lon_deg",
-      topicWrapper: (msg: any) => ({ lon_deg: msg.lon_rad * 180 / Math.PI })
-    },
-    heading: {
-      type: "subscriber",
-      topic: arnavIMUTopic,
-      topicField: ".yaw_deg",
-      topicWrapper: imuWrapper
     }
   }
 };
@@ -281,43 +182,19 @@ export const config: Entity = {
           items: {
             map: {
               label: "Map",
-              width: 8,
-              height: 8,
+              width: 16,
+              height: 12,
               x: 8,
-              y: 4,
-              widget: mapWidget
-            },
-            map2: {
-              label: "Map",
-              width: 8,
-              height: 8,
-              x: 16,
-              y: 4,
-              widget: mapWidget2
-            },
-            hud3: {
-              label: "HUD",
-              width: 8,
-              height: 4,
-              x: 0,
               y: 0,
-              widget: hudWidget3
+              widget: mapWidget
             },
             hud: {
               label: "HUD",
               width: 8,
               height: 4,
-              x: 8,
+              x: 0,
               y: 0,
               widget: hudWidget
-            },
-            hud2: {
-              label: "HUD",
-              width: 8,
-              height: 4,
-              x: 16,
-              y: 0,
-              widget: hudWidget2
             },
             gpsStatus: {
               label: "GPS Status",

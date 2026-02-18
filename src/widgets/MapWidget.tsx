@@ -171,7 +171,7 @@ export function MapWidget({ initialZoom = DEFAULT_ZOOM, maxZoom = DEFAULT_MAX_ZO
 
       {/* Path trail */}
       {path.length > 1 && (
-        <Polyline positions={path} pathOptions={{ color: "purple", weight: 2 }} />
+        <Polyline positions={path} pathOptions={{ color: "yellow", weight: 3 }} />
       )}
     </MapContainer>
   );
