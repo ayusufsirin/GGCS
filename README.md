@@ -194,3 +194,29 @@ finally:
 PY
 '
 ```
+
+## Headless platform migration (Milestone 01)
+
+The repository now contains the first strangler-migration workspaces beside the existing React application:
+
+```text
+packages/schema
+packages/core
+packages/plugin-sdk
+packages/testing
+apps/examples/minimal-headless
+```
+
+These packages are intentionally non-ROS and non-renderer. The legacy React application remains in `src/` and is not migrated by Milestone 01.
+
+The new workspaces use pnpm while the legacy Docker/CRA npm flow remains available during migration. With Node.js 20+ for the M01 test toolchain and Corepack enabled:
+
+```bash
+corepack enable
+pnpm install
+pnpm run verify:m01
+```
+
+`verify:m01` builds the project-reference graph, runs the Vitest M01 acceptance suite, checks `@ggcs/core` dependency boundaries, and executes the minimal headless example.
+
+The canonical architecture, milestone gates, and continuation rules are maintained in the GGCS Drive project area (`AGENTS.md`, `ROADMAP_V0.md`, and the accepted ADRs).

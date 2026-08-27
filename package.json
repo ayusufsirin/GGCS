@@ -30,7 +30,12 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "build:m01": "pnpm --filter @ggcs/example-minimal-headless build",
+    "test:m01": "pnpm --filter @ggcs/testing test",
+    "example:m01": "node apps/examples/minimal-headless/dist/index.js",
+    "check:m01-boundaries": "node scripts/check-m01-boundaries.mjs",
+    "verify:m01": "pnpm run build:m01 && pnpm run test:m01 && pnpm run check:m01-boundaries && pnpm run example:m01"
   },
   "eslintConfig": {
     "extends": [
@@ -58,5 +63,6 @@
       "react": "19.1.1",
       "react-dom": "19.1.1"
     }
-  }
+  },
+  "packageManager": "pnpm@10.34.0"
 }

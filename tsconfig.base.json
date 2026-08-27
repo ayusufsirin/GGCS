@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "composite": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "baseUrl": ".",
+    "paths": {
+      "@ggcs/schema": [
+        "packages/schema/src/index.ts"
+      ],
+      "@ggcs/core": [
+        "packages/core/src/index.ts"
+      ],
+      "@ggcs/plugin-sdk": [
+        "packages/plugin-sdk/src/index.ts"
+      ],
+      "@ggcs/testing": [
+        "packages/testing/src/index.ts"
+      ]
+    },
+    "lib": [
+      "ES2022"
+    ]
+  }
+}

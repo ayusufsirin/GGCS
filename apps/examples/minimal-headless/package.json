@@ -1,0 +1,20 @@
+{
+  "name": "@ggcs/example-minimal-headless",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@ggcs/core": "workspace:*",
+    "@ggcs/plugin-sdk": "workspace:*",
+    "@ggcs/schema": "workspace:*",
+    "@ggcs/testing": "workspace:*"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "start": "node dist/index.js",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo"
+  },
+  "devDependencies": {
+    "typescript": "5.8.3"
+  }
+}
