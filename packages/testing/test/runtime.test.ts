@@ -124,4 +124,22 @@ describe("Runtime lifecycle/provider orchestration", () => {
     expect(runtime.state()).toBe("stopped");
   });
 
+  it("does not create any live resources when provider preparation fails", () => {
+    const testing = createTestingPlugin();
+    const compiledDefinition = {
+      schemaVersion: GGCS_SCHEMA_VERSION,
+      plugins: ["testing:plugin"],
+      resources: [
+        { id: "good", provider: TEST_PROVIDER_IDS.source, type: CORE_TYPE_IDS.number, config: { initial: 1 } },
+        { id: "bad", provider: TEST_PROVIDER_IDS.source, type: CORE_TYPE_IDS.number, config: { typo: true } },
+      ],
+    } as const;
+
+    expect(() => compileApplication(compiledDefinition, createRegistryBuilder().register(testing.plugin))).toThrowError(
+      expect.objectContaining({ code: "GGCS_CONFIG_FIELD_UNKNOWN" }),
+    );
+    expect(testing.events.filter((event) => event.phase === "prepare").map((event) => event.resourceId)).toEqual(["good"]);
+    expect(testing.events.filter((event) => event.phase === "create")).toHaveLength(0);
+  });
+
 });

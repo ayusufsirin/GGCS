@@ -139,4 +139,75 @@ describe("Registry/schema/type validation", () => {
     );
   });
 
+  it("rejects missing application plugins, duplicate providers/computations, and unknown computations", () => {
+    const testing = createTestingPlugin();
+    expect(() => compileApplication({
+      schemaVersion: GGCS_SCHEMA_VERSION,
+      plugins: ["testing:plugin", "missing:plugin"],
+      resources: [],
+    }, createRegistryBuilder().register(testing.plugin))).toThrowError(
+      expect.objectContaining({ code: "GGCS_APPLICATION_PLUGIN_MISSING" }),
+    );
+
+    const providerA = {
+      id: "p:provider/x",
+      prepare(definition: any) {
+        return { id: definition.id, provider: "p:provider/x", type: definition.type, dependencies: [], prepared: {} };
+      },
+      create() {
+        throw new Error("not used");
+      },
+    };
+    const providerB = { ...providerA };
+    const providerPluginA = definePlugin({
+      manifest: { id: "p:provider-a", version: "0.1.0", ggcsApi: "^0.1.0" },
+      resourceProviders: [providerA],
+    });
+    const providerPluginB = definePlugin({
+      manifest: { id: "p:provider-b", version: "0.1.0", ggcsApi: "^0.1.0" },
+      resourceProviders: [providerB],
+    });
+    expect(() => createRegistryBuilder().register(providerPluginA).register(providerPluginB).freeze()).toThrowError(
+      expect.objectContaining({ code: "GGCS_PROVIDER_DUPLICATE" }),
+    );
+
+    const computationA = {
+      id: "p:computation/x",
+      inputs: { input: CORE_TYPE_IDS.number },
+      output: CORE_TYPE_IDS.number,
+      create() {
+        return { compute: ({ inputs }: any) => inputs.input };
+      },
+    };
+    const computationB = { ...computationA };
+    const computationPluginA = definePlugin({
+      manifest: { id: "p:computation-a", version: "0.1.0", ggcsApi: "^0.1.0" },
+      computations: [computationA],
+    });
+    const computationPluginB = definePlugin({
+      manifest: { id: "p:computation-b", version: "0.1.0", ggcsApi: "^0.1.0" },
+      computations: [computationB],
+    });
+    expect(() => createRegistryBuilder().register(computationPluginA).register(computationPluginB).freeze()).toThrowError(
+      expect.objectContaining({ code: "GGCS_COMPUTATION_DUPLICATE" }),
+    );
+
+    const testing2 = createTestingPlugin();
+    expect(() => compileApplication({
+      schemaVersion: GGCS_SCHEMA_VERSION,
+      plugins: ["testing:plugin"],
+      resources: [
+        { id: "raw", provider: TEST_PROVIDER_IDS.source, type: CORE_TYPE_IDS.number, config: { initial: 1 } },
+        {
+          id: "derived",
+          provider: DERIVED_PROVIDER_ID,
+          type: CORE_TYPE_IDS.number,
+          config: { computation: "missing:computation", inputs: { input: "raw" } },
+        },
+      ],
+    }, createRegistryBuilder().register(testing2.plugin))).toThrowError(
+      expect.objectContaining({ code: "GGCS_COMPUTATION_UNKNOWN" }),
+    );
+  });
+
 });
