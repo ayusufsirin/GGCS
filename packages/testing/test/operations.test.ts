@@ -94,4 +94,57 @@ describe("Command/Invocation/Procedure/Parameter", () => {
     await expect(rejected.result()).rejects.toMatchObject({ code: "GGCS_PARAMETER_READ_ONLY" });
     await runtime.stop();
   });
+
+  it("publishes invocation state transitions to subscribers and ignores later terminal writes", async () => {
+    const clock = new FakeClock();
+    const controller = createInvocationController<number>({ clock });
+    const seen: string[] = [];
+    const subscription = controller.invocation.subscribe((state) => seen.push(state.state));
+    controller.succeed(42);
+    controller.fail(new Error("too late"));
+    controller.timeout();
+    subscription.unsubscribe();
+    subscription.unsubscribe();
+    expect(seen).toEqual(["pending", "succeeded"]);
+    await expect(controller.invocation.result()).resolves.toBe(42);
+  });
+
+  it("supports parameter refresh and catalog filtering without changing authoritative defaults", async () => {
+    const testing = createTestingPlugin();
+    const compiled = compileApplication({
+      schemaVersion: GGCS_SCHEMA_VERSION,
+      plugins: ["testing:plugin"],
+      resources: [{
+        id: "params",
+        provider: TEST_PROVIDER_IDS.parameterProvider,
+        type: CORE_TYPE_IDS.object,
+        config: { parameters: [
+          { id: "drive.target", type: CORE_TYPE_IDS.number, writable: true, initial: 20, defaultValue: 21 },
+          { id: "drive.readOnly", type: CORE_TYPE_IDS.number, writable: false, initial: 1 },
+          { id: "camera.exposure", type: CORE_TYPE_IDS.number, writable: true, initial: 10 },
+        ] },
+      }],
+    }, createRegistryBuilder().register(testing.plugin));
+    const clock = new FakeClock();
+    const runtime = compiled.createRuntime({ clock });
+    await runtime.start();
+    const provider = runtime.resource<ParameterProvider>("params");
+    expect((await provider.list({ prefix: "drive." })).map((item) => item.id)).toEqual([
+      "drive.target",
+      "drive.readOnly",
+    ]);
+    expect((await provider.list({ writable: true })).map((item) => item.id)).toEqual([
+      "drive.target",
+      "camera.exposure",
+    ]);
+    const target = await provider.resolve<number>("drive.target");
+    const refresh = target.refresh();
+    expect(refresh.current().state).toBe("pending");
+    clock.advanceBy(0);
+    await expect(refresh.result()).resolves.toBe(20);
+    expect(target.value.current()).toMatchObject({ state: "fresh", value: 20 });
+    expect(target.descriptor.defaultValue).toBe(21);
+    await runtime.stop();
+  });
+
 });

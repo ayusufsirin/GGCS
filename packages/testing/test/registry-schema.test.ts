@@ -112,4 +112,31 @@ describe("Registry/schema/type validation", () => {
       expect.objectContaining({ code: "GGCS_RESOURCE_FIELD_UNKNOWN" }),
     );
   });
+
+  it("rejects plugin dependency version mismatches and unknown semantic types", () => {
+    const dependency = definePlugin({
+      manifest: { id: "p:dependency", version: "1.5.0", ggcsApi: "^0.1.0" },
+    });
+    const consumer = definePlugin({
+      manifest: {
+        id: "p:consumer",
+        version: "1.0.0",
+        ggcsApi: "^0.1.0",
+        requires: [{ id: "p:dependency", version: "^2.0.0" }],
+      },
+    });
+    expect(() => createRegistryBuilder().register(dependency).register(consumer).freeze()).toThrowError(
+      expect.objectContaining({ code: "GGCS_PLUGIN_DEPENDENCY_VERSION" }),
+    );
+
+    const testing = createTestingPlugin();
+    expect(() => compileApplication({
+      schemaVersion: GGCS_SCHEMA_VERSION,
+      plugins: ["testing:plugin"],
+      resources: [{ id: "x", provider: TEST_PROVIDER_IDS.source, type: "missing:type" }],
+    }, createRegistryBuilder().register(testing.plugin))).toThrowError(
+      expect.objectContaining({ code: "GGCS_TYPE_UNKNOWN" }),
+    );
+  });
+
 });

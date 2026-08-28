@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DERIVED_PROVIDER_ID,
+  RuntimeError,
   compileApplication,
   createRegistryBuilder,
   defineValueTransform,
@@ -123,4 +124,85 @@ describe("DerivedSource/computation", () => {
     expect(runtime.resource<Source<number>>("b").current()).toMatchObject({ value: 2 });
     await runtime.stop();
   });
+
+  it("recomputes a multi-input computation whenever either dependency changes", async () => {
+    const sum = {
+      id: "test:sum",
+      inputs: { left: CORE_TYPE_IDS.number, right: CORE_TYPE_IDS.number },
+      output: CORE_TYPE_IDS.number,
+      create(): ComputationInstance<number> {
+        return {
+          compute({ inputs, clock }): Observation<number> {
+            const left = inputs.left;
+            const right = inputs.right;
+            if (left?.state !== "fresh" || right?.state !== "fresh") {
+              return { state: "unavailable", since: clock.wallNow() };
+            }
+            return {
+              state: "fresh",
+              value: (left.value as number) + (right.value as number),
+              updatedAt: clock.wallNow(),
+            };
+          },
+        };
+      },
+    };
+    const testing = createTestingPlugin();
+    const plugin = definePlugin({
+      manifest: { id: "test:sum-plugin", version: "0.1.0", ggcsApi: "^0.1.0" },
+      computations: [sum],
+    });
+    const compiled = compileApplication({
+      schemaVersion: GGCS_SCHEMA_VERSION,
+      plugins: ["testing:plugin", "test:sum-plugin"],
+      resources: [
+        { id: "left", provider: TEST_PROVIDER_IDS.source, type: CORE_TYPE_IDS.number, config: { initial: 2 } },
+        { id: "right", provider: TEST_PROVIDER_IDS.source, type: CORE_TYPE_IDS.number, config: { initial: 3 } },
+        { id: "sum", provider: DERIVED_PROVIDER_ID, type: CORE_TYPE_IDS.number, config: { computation: sum.id, inputs: { left: "left", right: "right" } } },
+      ],
+    }, createRegistryBuilder().register(testing.plugin).register(plugin));
+    const runtime = compiled.createRuntime({ clock: new FakeClock() });
+    await runtime.start();
+    const derived = runtime.resource<Source<number>>("sum");
+    expect(derived.current()).toMatchObject({ state: "fresh", value: 5 });
+    runtime.resource<TestSource<number>>("left").emit(10);
+    expect(derived.current()).toMatchObject({ state: "fresh", value: 13 });
+    runtime.resource<TestSource<number>>("right").emit(-4);
+    expect(derived.current()).toMatchObject({ state: "fresh", value: 6 });
+    await runtime.stop();
+  });
+
+  it("propagates unavailable and error observations through ordinary value transforms", async () => {
+    const testing = createTestingPlugin();
+    const plugin = definePlugin({
+      manifest: { id: "test:propagation", version: "0.1.0", ggcsApi: "^0.1.0" },
+      types: [doubledType],
+      computations: [double],
+    });
+    const compiled = compileApplication({
+      schemaVersion: GGCS_SCHEMA_VERSION,
+      plugins: ["testing:plugin", "test:propagation"],
+      resources: [
+        { id: "raw", provider: TEST_PROVIDER_IDS.source, type: CORE_TYPE_IDS.number },
+        { id: "derived", provider: DERIVED_PROVIDER_ID, type: doubledType.id, config: { computation: double.id, inputs: { input: "raw" } } },
+      ],
+    }, createRegistryBuilder().register(testing.plugin).register(plugin));
+    const runtime = compiled.createRuntime({ clock: new FakeClock() });
+    await runtime.start();
+    const derived = runtime.resource<Source<number>>("derived");
+    expect(derived.current().state).toBe("unavailable");
+    runtime.resource<TestSource<number>>("raw").setError(
+      new RuntimeError({
+        code: "TEST_INPUT_ERROR",
+        category: "resource_error",
+        message: "input failed",
+      }),
+    );
+    expect(derived.current()).toMatchObject({
+      state: "error",
+      error: { code: "TEST_INPUT_ERROR" },
+    });
+    await runtime.stop();
+  });
+
 });

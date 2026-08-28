@@ -3,7 +3,9 @@ import {
   RuntimeError,
   compileApplication,
   createRegistryBuilder,
+  type ResourceProvider,
 } from "@ggcs/core";
+import { definePlugin } from "@ggcs/plugin-sdk";
 import { CORE_TYPE_IDS, GGCS_SCHEMA_VERSION } from "@ggcs/schema";
 import { FakeClock, TEST_PROVIDER_IDS, TestSource, createTestingPlugin } from "../src/index.js";
 
@@ -77,4 +79,49 @@ describe("Runtime lifecycle/provider orchestration", () => {
       expect.objectContaining({ code: "GGCS_RESOURCE_DEPENDENCY_CYCLE" }),
     );
   });
+
+  it("cleans already-created resources when a later provider fails during start", async () => {
+    const testing = createTestingPlugin();
+    const failingProvider: ResourceProvider<{}> = {
+      id: "test:failing-provider",
+      prepare(definition) {
+        return {
+          id: definition.id,
+          provider: "test:failing-provider",
+          type: definition.type,
+          dependencies: ["a"],
+          prepared: {},
+        };
+      },
+      create() {
+        throw new RuntimeError({
+          code: "TEST_CREATE_FAILED",
+          category: "provider_create",
+          message: "intentional create failure",
+        });
+      },
+    };
+    const failingPlugin = definePlugin({
+      manifest: { id: "test:failing-plugin", version: "0.1.0", ggcsApi: "^0.1.0" },
+      resourceProviders: [failingProvider],
+    });
+    const compiled = compileApplication({
+      schemaVersion: GGCS_SCHEMA_VERSION,
+      plugins: ["testing:plugin", "test:failing-plugin"],
+      resources: [
+        { id: "a", provider: TEST_PROVIDER_IDS.source, type: CORE_TYPE_IDS.number, config: { initial: 1 } },
+        { id: "b", provider: failingProvider.id, type: CORE_TYPE_IDS.number },
+      ],
+    }, createRegistryBuilder().register(testing.plugin).register(failingPlugin));
+    const runtime = compiled.createRuntime({ clock: new FakeClock() });
+    await expect(runtime.start()).rejects.toMatchObject({ code: "TEST_CREATE_FAILED" });
+    expect(runtime.state()).toBe("error");
+    expect(testing.events.filter((event) => event.phase === "dispose").map((event) => event.resourceId)).toEqual(["a"]);
+    expect(() => runtime.resource("a")).toThrowError(
+      expect.objectContaining({ code: "GGCS_RUNTIME_RESOURCE_UNAVAILABLE" }),
+    );
+    await runtime.stop();
+    expect(runtime.state()).toBe("stopped");
+  });
+
 });

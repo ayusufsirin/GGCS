@@ -56,4 +56,37 @@ describe("Source/Observation", () => {
       lastGood: { state: "fresh", value: 7 },
     });
   });
+
+  it("preserves deterministic update order and rearms freshness from the newest value", () => {
+    const clock = new FakeClock();
+    const controller = createSourceController<number>({
+      id: "ordered",
+      clock,
+      freshness: { staleAfterMs: 50 },
+    });
+    const seen: Array<[string, number | undefined]> = [];
+    controller.source.subscribe((observation) => {
+      seen.push([
+        observation.state,
+        observation.state === "fresh" || observation.state === "stale"
+          ? observation.value
+          : undefined,
+      ]);
+    });
+
+    controller.publish(1);
+    clock.advanceBy(40);
+    controller.publish(2);
+    clock.advanceBy(10); // the cancelled timer for value 1 must not stale value 2
+    expect(controller.source.current()).toMatchObject({ state: "fresh", value: 2 });
+    clock.advanceBy(40);
+    expect(controller.source.current()).toMatchObject({ state: "stale", value: 2 });
+    expect(seen).toEqual([
+      ["unavailable", undefined],
+      ["fresh", 1],
+      ["fresh", 2],
+      ["stale", 2],
+    ]);
+  });
+
 });
