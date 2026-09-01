@@ -41,7 +41,14 @@
     "docker:web:dev": "docker compose --profile web up --build web-dev",
     "docker:web:prod": "docker compose --profile web-prod up --build -d web-prod",
     "docker:rosbridge": "docker compose --profile ros up --build -d rosbridge",
-    "check:nexus-config": "sh scripts/check-nexus-config.sh"
+    "check:nexus-config": "sh scripts/check-nexus-config.sh",
+    "build:m02": "tsc -b tsconfig.m02.json",
+    "test:m02": "pnpm --filter @ggcs/transport-rosbridge test",
+    "check:m02-boundaries": "node scripts/check-m02-boundaries.mjs",
+    "example:m02": "node apps/examples/rosbridge-headless/dist/index.js",
+    "verify:m02": "pnpm run build:m02 && pnpm run test:m01 && pnpm run test:m02 && pnpm run check:m01-boundaries && pnpm run check:m02-boundaries && pnpm run check:nexus-config",
+    "docker:m02:verify": "docker compose --profile m02 run --rm --build m02-verify",
+    "docker:m02:smoke": "docker compose --profile m02 up --build --abort-on-container-exit --exit-code-from m02-connection-smoke m02-connection-smoke"
   },
   "eslintConfig": {
     "extends": [

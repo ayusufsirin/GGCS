@@ -44,3 +44,10 @@ CMD ["pnpm", "run", "verify:m01"]
 FROM workspace AS m01-example
 RUN pnpm run build:m01
 CMD ["pnpm", "run", "example:m01"]
+
+FROM workspace AS m02-verify
+CMD ["pnpm", "run", "verify:m02"]
+
+FROM workspace AS m02-example
+RUN pnpm run build:m02
+CMD ["pnpm", "run", "example:m02"]

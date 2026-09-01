@@ -26,6 +26,9 @@
       ],
       "@ggcs/testing": [
         "packages/testing/src/index.ts"
+      ],
+      "@ggcs/transport-rosbridge": [
+        "packages/transport-rosbridge/src/index.ts"
       ]
     },
     "lib": [
