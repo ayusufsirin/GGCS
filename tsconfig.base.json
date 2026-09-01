@@ -29,6 +29,9 @@
       ],
       "@ggcs/transport-rosbridge": [
         "packages/transport-rosbridge/src/index.ts"
+      ],
+      "@ggcs/ros": [
+        "packages/ros/src/index.ts"
       ]
     },
     "lib": [

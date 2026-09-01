@@ -8,7 +8,13 @@ import {
   type Subscription,
 } from "@ggcs/core";
 import type { ConnectionId } from "@ggcs/schema";
-import type { RosbridgeClient, RosbridgeClientFactory } from "./client.js";
+import type {
+  RosbridgeClient,
+  RosbridgeClientFactory,
+  RosbridgeTopic,
+  RosbridgeTopicListener,
+  RosbridgeTopicOptions,
+} from "./client.js";
 
 export interface RosbridgeReconnectPolicy {
   readonly enabled: boolean;
@@ -25,6 +31,18 @@ export interface RosbridgeConnectionOptions {
   readonly clientFactory: RosbridgeClientFactory;
 }
 
+interface TopicConsumer {
+  readonly onMessage: RosbridgeTopicListener;
+  readonly onError: (error: RuntimeError) => void;
+}
+
+interface TopicPoolEntry {
+  readonly options: RosbridgeTopicOptions;
+  readonly consumers: Set<TopicConsumer>;
+  topic: RosbridgeTopic | undefined;
+  physicalListener: RosbridgeTopicListener | undefined;
+}
+
 function asConnectionError(error: unknown, url: string): RuntimeError {
   if (error instanceof RuntimeError) return error;
   return new RuntimeError({
@@ -32,6 +50,23 @@ function asConnectionError(error: unknown, url: string): RuntimeError {
     category: "resource_error",
     message: `ROSBridge connection failure for ${url}`,
     details: { url },
+    cause: error,
+  });
+}
+
+function asTopicSubscriptionError(
+  error: unknown,
+  options: RosbridgeTopicOptions,
+): RuntimeError {
+  if (error instanceof RuntimeError) return error;
+  return new RuntimeError({
+    code: "GGCS_ROSBRIDGE_TOPIC_SUBSCRIBE_FAILURE",
+    category: "resource_error",
+    message: `ROSBridge topic subscription failed for ${options.topic}`,
+    details: {
+      topic: options.topic,
+      messageType: options.messageType,
+    },
     cause: error,
   });
 }
@@ -49,12 +84,23 @@ function notifySafely(
   }
 }
 
+function topicPoolKey(options: RosbridgeTopicOptions): string {
+  return JSON.stringify([
+    options.topic,
+    options.messageType,
+    options.compression ?? null,
+    options.throttleRateMs ?? null,
+    options.queueLength ?? null,
+  ]);
+}
+
 export class RosbridgeConnection implements Connection {
   readonly kind = "connection" as const;
   readonly id: ConnectionId;
 
   private readonly listeners = new Set<(state: ConnectionState) => void>();
   private readonly client: RosbridgeClient;
+  private readonly topicPool = new Map<string, TopicPoolEntry>();
   private stateValue: ConnectionState;
   private reconnectTask: ScheduledTask | undefined;
   private disposed = false;
@@ -102,6 +148,8 @@ export class RosbridgeConnection implements Connection {
     this.disposed = true;
     this.reconnectTask?.cancel();
     this.reconnectTask = undefined;
+    this.unbindAllTopics();
+    this.topicPool.clear();
     try {
       this.client.close();
     } catch {
@@ -115,7 +163,7 @@ export class RosbridgeConnection implements Connection {
     this.listeners.clear();
   }
 
-  /** Package-internal session generation for later topic/service rebinding. */
+  /** Package-internal session generation for topic/service rebinding. */
   generation(): number {
     return this.sessionGeneration;
   }
@@ -123,6 +171,53 @@ export class RosbridgeConnection implements Connection {
   /** Package-internal ROS client for later transport providers. */
   rosClient(): RosbridgeClient {
     return this.client;
+  }
+
+  /**
+   * Acquire a semantic consumer of a physical ROS subscription. Equivalent
+   * wire-significant options share one ROSLIB.Topic within this Connection.
+   */
+  acquireTopicSubscription(
+    options: RosbridgeTopicOptions,
+    consumer: TopicConsumer,
+  ): Subscription {
+    if (this.disposed) {
+      consumer.onError(
+        new RuntimeError({
+          code: "GGCS_ROSBRIDGE_CONNECTION_DISPOSED",
+          category: "resource_unavailable",
+          message: `ROSBridge connection ${this.id} is disposed`,
+          details: { connection: this.id, topic: options.topic },
+        }),
+      );
+      return createSubscription(() => undefined);
+    }
+
+    const key = topicPoolKey(options);
+    let entry = this.topicPool.get(key);
+    if (!entry) {
+      entry = {
+        options,
+        consumers: new Set(),
+        topic: undefined,
+        physicalListener: undefined,
+      };
+      this.topicPool.set(key, entry);
+    }
+    entry.consumers.add(consumer);
+
+    if (this.stateValue.state === "connected") {
+      this.bindTopic(entry);
+    }
+
+    return createSubscription(() => {
+      const current = this.topicPool.get(key);
+      if (!current) return;
+      current.consumers.delete(consumer);
+      if (current.consumers.size > 0) return;
+      this.unbindTopic(current);
+      this.topicPool.delete(key);
+    });
   }
 
   private transition(next: ConnectionState): void {
@@ -151,6 +246,7 @@ export class RosbridgeConnection implements Connection {
     this.lastFailure = undefined;
     this.sessionGeneration += 1;
     this.transition({ state: "connected", since: this.options.clock.wallNow() });
+    this.bindAllTopics();
   }
 
   private handleError(error: unknown): void {
@@ -170,6 +266,9 @@ export class RosbridgeConnection implements Connection {
 
   private handleClose(): void {
     if (this.disposed) return;
+    // Physical ROSLIB Topic objects belong to one live session generation.
+    // Remove them before reconnect so no resource can keep using a dead object.
+    this.unbindAllTopics();
     this.scheduleReconnectOrDisconnect();
   }
 
@@ -201,5 +300,62 @@ export class RosbridgeConnection implements Connection {
       this.reconnectTask = undefined;
       this.beginConnect();
     });
+  }
+
+  private bindAllTopics(): void {
+    for (const entry of this.topicPool.values()) this.bindTopic(entry);
+  }
+
+  private bindTopic(entry: TopicPoolEntry): void {
+    if (
+      this.disposed ||
+      this.stateValue.state !== "connected" ||
+      entry.topic !== undefined ||
+      entry.consumers.size === 0
+    ) {
+      return;
+    }
+
+    try {
+      const topic = this.client.createTopic(entry.options);
+      const listener: RosbridgeTopicListener = (message) => {
+        for (const consumer of [...entry.consumers]) {
+          try {
+            consumer.onMessage(message);
+          } catch {
+            // One semantic Source consumer must not break pooled delivery.
+          }
+        }
+      };
+      topic.subscribe(listener);
+      entry.topic = topic;
+      entry.physicalListener = listener;
+    } catch (error) {
+      const mapped = asTopicSubscriptionError(error, entry.options);
+      for (const consumer of [...entry.consumers]) {
+        try {
+          consumer.onError(mapped);
+        } catch {
+          // Error observers are isolated from the transport pool.
+        }
+      }
+    }
+  }
+
+  private unbindAllTopics(): void {
+    for (const entry of this.topicPool.values()) this.unbindTopic(entry);
+  }
+
+  private unbindTopic(entry: TopicPoolEntry): void {
+    const topic = entry.topic;
+    const listener = entry.physicalListener;
+    entry.topic = undefined;
+    entry.physicalListener = undefined;
+    if (!topic || !listener) return;
+    try {
+      topic.unsubscribe(listener);
+    } catch {
+      // Socket/session disposal must continue even if ROSLIB unsubscribe fails.
+    }
   }
 }

@@ -111,3 +111,41 @@ services:
       rosbridge:
         condition: service_started
     command: ["pnpm", "run", "example:m02"]
+
+  m02-ros-fixture:
+    profiles: ["m02"]
+    build:
+      context: .
+      dockerfile: rosfixture.Dockerfile
+      args:
+        <<: *registry-build-args
+    environment:
+      RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
+      ROS_LOCALHOST_ONLY: ${ROS_LOCALHOST_ONLY:-0}
+    # Share rosbridge's network namespace so DDS still works if CycloneDDS
+    # selects loopback inside the Docker environment.
+    network_mode: "service:rosbridge"
+    depends_on:
+      rosbridge:
+        condition: service_started
+    restart: unless-stopped
+
+  m02-topic-source-smoke:
+    profiles: ["m02"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: m02-example
+      args:
+        <<: *registry-build-args
+        NODE_VERSION: ${GGCS_NODE_VERSION:-22.23.2}
+        PNPM_VERSION: ${GGCS_PNPM_VERSION:-10.34.5}
+    environment:
+      GGCS_ROSBRIDGE_URL: ws://rosbridge:9090
+      GGCS_ROSBRIDGE_TOPIC_TIMEOUT_MS: ${GGCS_ROSBRIDGE_TOPIC_TIMEOUT_MS:-15000}
+    depends_on:
+      rosbridge:
+        condition: service_started
+      m02-ros-fixture:
+        condition: service_started
+    command: ["pnpm", "run", "example:m02:topic"]

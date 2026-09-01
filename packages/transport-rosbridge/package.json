@@ -17,7 +17,8 @@
     "@ggcs/core": "workspace:*",
     "@ggcs/plugin-sdk": "workspace:*",
     "@ggcs/schema": "workspace:*",
-    "roslib": "1.4.1"
+    "roslib": "1.4.1",
+    "@ggcs/ros": "workspace:*"
   },
   "scripts": {
     "build": "tsc -b",

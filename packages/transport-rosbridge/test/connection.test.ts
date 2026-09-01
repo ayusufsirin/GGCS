@@ -14,6 +14,8 @@ import {
   type RosbridgeClientEvent,
   type RosbridgeClientFactory,
   type RosbridgeClientListener,
+  type RosbridgeTopic,
+  type RosbridgeTopicOptions,
 } from "../src/index.js";
 
 class FakeRosbridgeClient implements RosbridgeClient {
@@ -39,6 +41,10 @@ class FakeRosbridgeClient implements RosbridgeClient {
     this.closeCalls += 1;
     this.isConnected = false;
     this.emit("close");
+  }
+
+  createTopic(_options: RosbridgeTopicOptions): RosbridgeTopic {
+    throw new Error("Connection-only test must not create topics");
   }
 
   open(): void {

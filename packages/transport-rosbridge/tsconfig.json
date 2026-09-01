@@ -8,6 +8,7 @@
   "references": [
     { "path": "../schema" },
     { "path": "../core" },
+    { "path": "../ros" },
     { "path": "../plugin-sdk" }
   ],
   "include": ["src/**/*.ts"]
