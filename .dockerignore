@@ -1,0 +1,16 @@
+.git
+.gitignore
+node_modules
+**/node_modules
+build
+**/dist
+coverage
+**/*.tsbuildinfo
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+GGCS*.zip
+*.tar
+*.tar.gz
+.DS_Store

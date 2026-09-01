@@ -35,7 +35,12 @@
     "test:m01": "pnpm --filter @ggcs/testing test",
     "example:m01": "node apps/examples/minimal-headless/dist/index.js",
     "check:m01-boundaries": "node scripts/check-m01-boundaries.mjs",
-    "verify:m01": "pnpm run build:m01 && pnpm run test:m01 && pnpm run check:m01-boundaries && pnpm run example:m01"
+    "verify:m01": "pnpm run build:m01 && pnpm run test:m01 && pnpm run check:m01-boundaries && pnpm run example:m01",
+    "docker:m01:verify": "docker compose --profile verify run --rm --build m01-verify",
+    "docker:m01:example": "docker compose --profile example run --rm --build m01-example",
+    "docker:web:dev": "docker compose --profile web up --build web-dev",
+    "docker:web:prod": "docker compose --profile web-prod up --build -d web-prod",
+    "docker:rosbridge": "docker compose --profile ros up --build -d rosbridge"
   },
   "eslintConfig": {
     "extends": [

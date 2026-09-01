@@ -1,14 +1,16 @@
-# Use the latest LTS version of Node.js
-FROM node:18-alpine
- 
-# Set the working directory inside the container
+ARG NODE_VERSION=22.23.2
+FROM node:${NODE_VERSION}-bookworm
+
 WORKDIR /app
 
-# Uncomment if needed
-#COPY .npmrc ./
+COPY package.json package-lock.json .npmrc ./
+RUN npm ci
 
-# Expose the port your app runs on
+COPY tsconfig.json ./
+COPY public ./public
+COPY src ./src
+
+ENV HOST=0.0.0.0
 EXPOSE 3000
- 
-# Define the command to run your app
-#CMD ["npm", "start"]
+
+CMD ["npm", "start"]

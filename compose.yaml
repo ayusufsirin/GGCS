@@ -1,0 +1,66 @@
+name: ggcs
+
+services:
+  m01-verify:
+    profiles: ["verify"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: m01-verify
+      args:
+        NODE_VERSION: ${GGCS_NODE_VERSION:-22.23.2}
+        PNPM_VERSION: ${GGCS_PNPM_VERSION:-10.34.5}
+    command: ["pnpm", "run", "verify:m01"]
+
+  m01-example:
+    profiles: ["example"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: m01-example
+      args:
+        NODE_VERSION: ${GGCS_NODE_VERSION:-22.23.2}
+        PNPM_VERSION: ${GGCS_PNPM_VERSION:-10.34.5}
+    command: ["pnpm", "run", "example:m01"]
+
+  web-dev:
+    profiles: ["web"]
+    build:
+      context: .
+      dockerfile: react.Dockerfile
+      args:
+        NODE_VERSION: ${GGCS_NODE_VERSION:-22.23.2}
+    environment:
+      HOST: 0.0.0.0
+      WATCHPACK_POLLING: "true"
+      REACT_APP_GGCS_ROSBRIDGE_URL: ${REACT_APP_GGCS_ROSBRIDGE_URL:-ws://localhost:9090}
+    ports:
+      - "${GGCS_WEB_DEV_PORT:-3000}:3000"
+    volumes:
+      - ./src:/app/src
+      - ./public:/app/public
+      - ./tsconfig.json:/app/tsconfig.json:ro
+
+  web-prod:
+    profiles: ["web-prod"]
+    build:
+      context: .
+      dockerfile: react.prod.Dockerfile
+      args:
+        NODE_VERSION: ${GGCS_NODE_VERSION:-22.23.2}
+        REACT_APP_GGCS_ROSBRIDGE_URL: ${REACT_APP_GGCS_ROSBRIDGE_URL:-ws://localhost:9090}
+    ports:
+      - "${GGCS_WEB_PROD_PORT:-8080}:80"
+    restart: unless-stopped
+
+  rosbridge:
+    profiles: ["ros"]
+    build:
+      context: .
+      dockerfile: rosbridge.Dockerfile
+    environment:
+      RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
+      ROS_LOCALHOST_ONLY: ${ROS_LOCALHOST_ONLY:-0}
+    ports:
+      - "${GGCS_ROSBRIDGE_PORT:-9090}:9090"
+    restart: unless-stopped

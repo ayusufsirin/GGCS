@@ -1,34 +1,24 @@
-# Multi-stage build for production
-
-# Stage 1: Build
-FROM node:18-alpine AS builder
+# Multi-stage production build for the legacy React application.
+ARG NODE_VERSION=22.23.2
+FROM node:${NODE_VERSION}-bookworm AS builder
 
 WORKDIR /app
 
-# Copy package files
-COPY package.json package-lock.json tsconfig.json .npmrc ./
+ARG REACT_APP_GGCS_ROSBRIDGE_URL
+ENV REACT_APP_GGCS_ROSBRIDGE_URL=${REACT_APP_GGCS_ROSBRIDGE_URL}
 
-# Install dependencies
+COPY package.json package-lock.json tsconfig.json .npmrc ./
 RUN npm ci
 
-# Copy source code
 COPY src ./src
 COPY public ./public
-
-# Build the app
 RUN npm run build
 
-# Stage 2: Production server
 FROM nginx:alpine
-
-# Copy built files from builder stage
 COPY --from=builder /app/build /usr/share/nginx/html
 
-# Copy custom nginx config if needed (optional)
-# COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-# Expose port 80
 EXPOSE 80
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget -qO- http://127.0.0.1/ >/dev/null || exit 1
 
-# Start nginx
 CMD ["nginx", "-g", "daemon off;"]
