@@ -20,7 +20,7 @@ export interface RosbridgeClientFactory {
 }
 
 class RoslibClient implements RosbridgeClient {
-  private readonly ros = new ROSLIB.Ros();
+  private readonly ros = new ROSLIB.Ros({});
 
   get isConnected(): boolean {
     return this.ros.isConnected;
