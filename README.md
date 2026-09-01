@@ -12,6 +12,40 @@ npx create-react-app ggcs --template typescript
 
 GGCS uses Docker/Compose as the canonical environment boundary. A developer should only need Docker Engine with the Compose plugin for normal build, verification, development, and deployment workflows; installing Node, pnpm, npm, ROS, or nginx directly on the host is optional.
 
+### Optional Nexus repository proxies
+
+GGCS can route Docker base images, npm/pnpm/Corepack, PyPI/pip, Debian/Ubuntu APT, and ROS 2 APT downloads through Nexus Repository Manager. Nexus is optional: if `.env` is absent, or an individual `NEXUS_*` variable is blank, the corresponding public upstream is used directly.
+
+Start from the committed template only when Nexus overrides are needed:
+
+```bash
+cp .env.example .env
+```
+
+Fill only the endpoints that exist in your Nexus instance. For example:
+
+```dotenv
+NEXUS_DOCKER_REGISTRY=nexus.example.com/repository/docker-all
+NEXUS_NPM_REGISTRY=https://nexus.example.com/repository/npm-all/
+NEXUS_PYPI_INDEX_URL=https://nexus.example.com/repository/pypi-all/simple
+NEXUS_APT_DEBIAN_URL=https://nexus.example.com/repository/apt-debian
+NEXUS_APT_DEBIAN_SECURITY_URL=https://nexus.example.com/repository/apt-debian-security
+NEXUS_APT_UBUNTU_URL=https://nexus.example.com/repository/apt-ubuntu
+NEXUS_APT_UBUNTU_SECURITY_URL=https://nexus.example.com/repository/apt-ubuntu-security
+NEXUS_APT_UBUNTU_PORTS_URL=https://nexus.example.com/repository/apt-ubuntu-ports
+NEXUS_APT_ROS2_URL=https://nexus.example.com/repository/apt-ros2
+```
+
+`NEXUS_DOCKER_REGISTRY` is an image-reference prefix, so do not include `https://`. Local `.env` files are ignored by Git and must not contain source-controlled secrets. Nexus credentials are intentionally not passed as Docker build arguments; prefer anonymous/network-restricted read access for proxy groups, `docker login` for authenticated image pulls, and BuildKit secrets if authenticated package downloads become mandatory.
+
+With or without Nexus, the Compose commands remain identical:
+
+```bash
+docker compose --profile verify run --rm --build m01-verify
+```
+
+The registry-selection implementation is in `docker/nexus/configure-registries.sh`.
+
 ### Headless Core canonical verification
 
 ```bash

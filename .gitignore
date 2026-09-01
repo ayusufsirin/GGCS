@@ -25,3 +25,6 @@ yarn-error.log*
 # workspace build artifacts
 **/dist/
 **/*.tsbuildinfo
+
+# local Docker/Compose configuration
+/.env

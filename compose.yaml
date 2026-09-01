@@ -1,5 +1,16 @@
 name: ggcs
 
+x-registry-build-args: &registry-build-args
+  DOCKER_REGISTRY: ${NEXUS_DOCKER_REGISTRY:-docker.io}
+  NEXUS_NPM_REGISTRY: ${NEXUS_NPM_REGISTRY:-}
+  NEXUS_PYPI_INDEX_URL: ${NEXUS_PYPI_INDEX_URL:-}
+  NEXUS_APT_DEBIAN_URL: ${NEXUS_APT_DEBIAN_URL:-}
+  NEXUS_APT_DEBIAN_SECURITY_URL: ${NEXUS_APT_DEBIAN_SECURITY_URL:-}
+  NEXUS_APT_UBUNTU_URL: ${NEXUS_APT_UBUNTU_URL:-}
+  NEXUS_APT_UBUNTU_SECURITY_URL: ${NEXUS_APT_UBUNTU_SECURITY_URL:-}
+  NEXUS_APT_UBUNTU_PORTS_URL: ${NEXUS_APT_UBUNTU_PORTS_URL:-}
+  NEXUS_APT_ROS2_URL: ${NEXUS_APT_ROS2_URL:-}
+
 services:
   m01-verify:
     profiles: ["verify"]
@@ -8,6 +19,7 @@ services:
       dockerfile: Dockerfile
       target: m01-verify
       args:
+        <<: *registry-build-args
         NODE_VERSION: ${GGCS_NODE_VERSION:-22.23.2}
         PNPM_VERSION: ${GGCS_PNPM_VERSION:-10.34.5}
     command: ["pnpm", "run", "verify:m01"]
@@ -19,6 +31,7 @@ services:
       dockerfile: Dockerfile
       target: m01-example
       args:
+        <<: *registry-build-args
         NODE_VERSION: ${GGCS_NODE_VERSION:-22.23.2}
         PNPM_VERSION: ${GGCS_PNPM_VERSION:-10.34.5}
     command: ["pnpm", "run", "example:m01"]
@@ -29,6 +42,7 @@ services:
       context: .
       dockerfile: react.Dockerfile
       args:
+        <<: *registry-build-args
         NODE_VERSION: ${GGCS_NODE_VERSION:-22.23.2}
     environment:
       HOST: 0.0.0.0
@@ -47,6 +61,7 @@ services:
       context: .
       dockerfile: react.prod.Dockerfile
       args:
+        <<: *registry-build-args
         NODE_VERSION: ${GGCS_NODE_VERSION:-22.23.2}
         REACT_APP_GGCS_ROSBRIDGE_URL: ${REACT_APP_GGCS_ROSBRIDGE_URL:-ws://localhost:9090}
     ports:
@@ -58,6 +73,8 @@ services:
     build:
       context: .
       dockerfile: rosbridge.Dockerfile
+      args:
+        <<: *registry-build-args
     environment:
       RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
       ROS_LOCALHOST_ONLY: ${ROS_LOCALHOST_ONLY:-0}
