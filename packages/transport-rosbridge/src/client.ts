@@ -61,6 +61,23 @@ class RoslibTopic implements RosbridgeTopic {
     this.topic = new ROSLIB.Topic(
       topicOptions as ConstructorParameters<typeof ROSLIB.Topic>[0],
     );
+
+    // ROSLIB 1.4.1 has a binding defect when reconnect_on_close=false:
+    // Topic assigns ros.callOnConnection as an unbound function and later
+    // invokes it with the Topic as `this`, so subscribe/advertise throws
+    // before any rosbridge frame is sent. GGCS deliberately disables
+    // ROSLIB reconnect because the Connection owns session rebinding, so
+    // rebind only this send hook to the actual Ros instance. Keep the
+    // workaround isolated to the ROSLIB adapter edge.
+    const topicInternals = this.topic as unknown as {
+      callForSubscribeAndAdvertise(message: unknown): void;
+    };
+    const rosInternals = ros as unknown as {
+      callOnConnection(message: unknown): void;
+    };
+    topicInternals.callForSubscribeAndAdvertise = (message: unknown): void => {
+      rosInternals.callOnConnection(message);
+    };
   }
 
   subscribe(listener: RosbridgeTopicListener): void {

@@ -52,14 +52,27 @@ function waitForConnected(connection: Connection, timeout: number): Promise<void
 function waitForFresh(source: Source<RosMessage>, timeout: number): Promise<RosMessage> {
   const current = source.current();
   if (current.state === "fresh") return Promise.resolve(current.value);
+  if (current.state === "error") return Promise.reject(current.error);
 
   return new Promise<RosMessage>((resolve, reject) => {
     let subscription: Subscription | undefined;
     const timer = platform.setTimeout(() => {
       subscription?.unsubscribe();
-      reject(new Error(`Timed out waiting for ROS topic Source after ${timeout}ms`));
+      reject(
+        new Error(
+          `Timed out waiting for ROS topic Source after ${timeout}ms; current=${JSON.stringify(
+            source.current(),
+          )}`,
+        ),
+      );
     }, timeout);
     subscription = source.subscribe((observation) => {
+      if (observation.state === "error") {
+        platform.clearTimeout(timer);
+        subscription?.unsubscribe();
+        reject(observation.error);
+        return;
+      }
       if (observation.state !== "fresh") return;
       platform.clearTimeout(timer);
       subscription?.unsubscribe();
