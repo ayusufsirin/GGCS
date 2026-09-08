@@ -305,10 +305,11 @@ export class RosbridgeConnection implements Connection {
       };
       this.topicPublisherPool.set(key, entry);
     }
-    entry.references += 1;
+    const acquiredEntry = entry;
+    acquiredEntry.references += 1;
 
     if (this.stateValue.state === "connected") {
-      this.bindTopicPublisher(entry);
+      this.bindTopicPublisher(acquiredEntry);
     }
 
     let released = false;
@@ -322,13 +323,13 @@ export class RosbridgeConnection implements Connection {
             details: { connection: this.id, topic: options.topic },
           });
         }
-        this.publishTopic(key, entry, message);
+        this.publishTopic(key, acquiredEntry, message);
       },
       release: (): void => {
         if (released) return;
         released = true;
         const current = this.topicPublisherPool.get(key);
-        if (!current || current !== entry) return;
+        if (!current || current !== acquiredEntry) return;
         current.references -= 1;
         if (current.references > 0) return;
         this.unbindTopicPublisher(current);
