@@ -33,6 +33,9 @@ class FakeRosbridgeTopic implements RosbridgeTopic {
   readonly listeners = new Set<RosbridgeTopicListener>();
   subscribeCalls = 0;
   unsubscribeCalls = 0;
+  advertiseCalls = 0;
+  unadvertiseCalls = 0;
+  readonly published: unknown[] = [];
 
   constructor(readonly options: RosbridgeTopicOptions) {}
 
@@ -44,6 +47,18 @@ class FakeRosbridgeTopic implements RosbridgeTopic {
   unsubscribe(listener: RosbridgeTopicListener): void {
     this.unsubscribeCalls += 1;
     this.listeners.delete(listener);
+  }
+
+  advertise(): void {
+    this.advertiseCalls += 1;
+  }
+
+  unadvertise(): void {
+    this.unadvertiseCalls += 1;
+  }
+
+  publish(message: unknown): void {
+    this.published.push(message);
   }
 
   emit(message: unknown): void {

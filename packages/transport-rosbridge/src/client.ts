@@ -9,6 +9,8 @@ export interface RosbridgeTopicOptions {
   readonly compression?: string;
   readonly throttleRateMs?: number;
   readonly queueLength?: number;
+  readonly queueSize?: number;
+  readonly latch?: boolean;
 }
 
 export type RosbridgeTopicListener = (message: unknown) => void;
@@ -16,6 +18,9 @@ export type RosbridgeTopicListener = (message: unknown) => void;
 export interface RosbridgeTopic {
   subscribe(listener: RosbridgeTopicListener): void;
   unsubscribe(listener: RosbridgeTopicListener): void;
+  advertise(): void;
+  unadvertise(): void;
+  publish(message: unknown): void;
 }
 
 /**
@@ -57,6 +62,8 @@ class RoslibTopic implements RosbridgeTopic {
       ...(options.queueLength !== undefined
         ? { queue_length: options.queueLength }
         : {}),
+      ...(options.queueSize !== undefined ? { queue_size: options.queueSize } : {}),
+      ...(options.latch !== undefined ? { latch: options.latch } : {}),
     };
     this.topic = new ROSLIB.Topic(
       topicOptions as ConstructorParameters<typeof ROSLIB.Topic>[0],
@@ -86,6 +93,20 @@ class RoslibTopic implements RosbridgeTopic {
 
   unsubscribe(listener: RosbridgeTopicListener): void {
     this.topic.unsubscribe(listener);
+  }
+
+  advertise(): void {
+    this.topic.advertise();
+  }
+
+  unadvertise(): void {
+    this.topic.unadvertise();
+  }
+
+  publish(message: unknown): void {
+    this.topic.publish(
+      new ROSLIB.Message(message as ConstructorParameters<typeof ROSLIB.Message>[0]),
+    );
   }
 }
 

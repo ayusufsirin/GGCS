@@ -9,6 +9,7 @@
     { "path": "./packages/transport-rosbridge" },
     { "path": "./apps/examples/minimal-headless" },
     { "path": "./apps/examples/rosbridge-headless" },
-    { "path": "./apps/examples/rosbridge-topic-headless" }
+    { "path": "./apps/examples/rosbridge-topic-headless" },
+    { "path": "./apps/examples/rosbridge-command-headless" }
   ]
 }

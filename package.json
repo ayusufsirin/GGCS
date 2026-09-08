@@ -50,7 +50,9 @@
     "docker:m02:verify": "docker compose --profile m02 run --rm --build m02-verify",
     "docker:m02:smoke": "docker compose --profile m02 up --build --abort-on-container-exit --exit-code-from m02-connection-smoke m02-connection-smoke",
     "example:m02:topic": "node apps/examples/rosbridge-topic-headless/dist/index.js",
-    "docker:m02:topic-smoke": "docker compose --profile m02 up --build --abort-on-container-exit --exit-code-from m02-topic-source-smoke m02-topic-source-smoke"
+    "docker:m02:topic-smoke": "docker compose --profile m02 up --build --abort-on-container-exit --exit-code-from m02-topic-source-smoke m02-topic-source-smoke",
+    "example:m02:command": "node apps/examples/rosbridge-command-headless/dist/index.js",
+    "docker:m02:command-smoke": "docker compose --profile m02 up --build --abort-on-container-exit --exit-code-from m02-topic-command-smoke m02-topic-command-smoke"
   },
   "eslintConfig": {
     "extends": [

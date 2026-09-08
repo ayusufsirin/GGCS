@@ -14,7 +14,9 @@ export {
   ROSBRIDGE_PROVIDER_IDS,
   createRosbridgeTransportPlugin,
   type PreparedRosbridgeConnection,
+  type PreparedRosbridgeTopicCommand,
   type PreparedRosbridgeTopicSource,
+  type RosbridgePublishOptions,
   type RosbridgeSubscriptionOptions,
   type RosbridgeTransportPluginOptions,
 } from "./plugin.js";

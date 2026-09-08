@@ -16,4 +16,21 @@ describe("ROSLIB transport adapter", () => {
     expect(() => topic.subscribe(listener)).not.toThrow();
     expect(() => topic.unsubscribe(listener)).not.toThrow();
   });
+
+  it("can advertise and publish while GGCS owns reconnect lifecycle", () => {
+    const client = defaultRosbridgeClientFactory.create();
+    const topic = client.createTopic({
+      topic: "/ggcs_test/command",
+      messageType: "std_msgs/msg/Float64",
+      queueSize: 1,
+      latch: false,
+    });
+
+    // The same ROSLIB 1.4.1 callForSubscribeAndAdvertise binding path is used
+    // for publisher advertise operations. The adapter must keep it usable
+    // while ROSLIB reconnect_on_close remains disabled.
+    expect(() => topic.advertise()).not.toThrow();
+    expect(() => topic.publish({ data: 42 })).not.toThrow();
+    expect(() => topic.unadvertise()).not.toThrow();
+  });
 });

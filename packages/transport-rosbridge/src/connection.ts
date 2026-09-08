@@ -43,6 +43,18 @@ interface TopicPoolEntry {
   physicalListener: RosbridgeTopicListener | undefined;
 }
 
+interface TopicPublisherPoolEntry {
+  readonly options: RosbridgeTopicOptions;
+  references: number;
+  topic: RosbridgeTopic | undefined;
+  lastError: RuntimeError | undefined;
+}
+
+export interface RosbridgeTopicPublisherLease {
+  publish(message: unknown): void;
+  release(): void;
+}
+
 function asConnectionError(error: unknown, url: string): RuntimeError {
   if (error instanceof RuntimeError) return error;
   return new RuntimeError({
@@ -63,6 +75,40 @@ function asTopicSubscriptionError(
     code: "GGCS_ROSBRIDGE_TOPIC_SUBSCRIBE_FAILURE",
     category: "resource_error",
     message: `ROSBridge topic subscription failed for ${options.topic}`,
+    details: {
+      topic: options.topic,
+      messageType: options.messageType,
+    },
+    cause: error,
+  });
+}
+
+function asTopicPublisherSetupError(
+  error: unknown,
+  options: RosbridgeTopicOptions,
+): RuntimeError {
+  if (error instanceof RuntimeError) return error;
+  return new RuntimeError({
+    code: "GGCS_ROSBRIDGE_TOPIC_PUBLISHER_SETUP_FAILURE",
+    category: "command_dispatch",
+    message: `ROSBridge topic publisher setup failed for ${options.topic}`,
+    details: {
+      topic: options.topic,
+      messageType: options.messageType,
+    },
+    cause: error,
+  });
+}
+
+function asTopicPublishError(
+  error: unknown,
+  options: RosbridgeTopicOptions,
+): RuntimeError {
+  if (error instanceof RuntimeError) return error;
+  return new RuntimeError({
+    code: "GGCS_ROSBRIDGE_COMMAND_DISPATCH_FAILURE",
+    category: "command_dispatch",
+    message: `ROSBridge topic publish failed for ${options.topic}`,
     details: {
       topic: options.topic,
       messageType: options.messageType,
@@ -94,6 +140,15 @@ function topicPoolKey(options: RosbridgeTopicOptions): string {
   ]);
 }
 
+function topicPublisherPoolKey(options: RosbridgeTopicOptions): string {
+  return JSON.stringify([
+    options.topic,
+    options.messageType,
+    options.queueSize ?? null,
+    options.latch ?? null,
+  ]);
+}
+
 export class RosbridgeConnection implements Connection {
   readonly kind = "connection" as const;
   readonly id: ConnectionId;
@@ -101,6 +156,7 @@ export class RosbridgeConnection implements Connection {
   private readonly listeners = new Set<(state: ConnectionState) => void>();
   private readonly client: RosbridgeClient;
   private readonly topicPool = new Map<string, TopicPoolEntry>();
+  private readonly topicPublisherPool = new Map<string, TopicPublisherPoolEntry>();
   private stateValue: ConnectionState;
   private reconnectTask: ScheduledTask | undefined;
   private disposed = false;
@@ -149,7 +205,9 @@ export class RosbridgeConnection implements Connection {
     this.reconnectTask?.cancel();
     this.reconnectTask = undefined;
     this.unbindAllTopics();
+    this.unbindAllTopicPublishers();
     this.topicPool.clear();
+    this.topicPublisherPool.clear();
     try {
       this.client.close();
     } catch {
@@ -220,6 +278,65 @@ export class RosbridgeConnection implements Connection {
     });
   }
 
+  /**
+   * Acquire a semantic Command's lease on a physical ROS publisher. Equivalent
+   * wire-significant publish options share one advertised ROSLIB.Topic within
+   * this Connection. A send never queues across disconnects: publish() requires
+   * a currently connected session and fails deterministically otherwise.
+   */
+  acquireTopicPublisher(options: RosbridgeTopicOptions): RosbridgeTopicPublisherLease {
+    if (this.disposed) {
+      throw new RuntimeError({
+        code: "GGCS_ROSBRIDGE_CONNECTION_DISPOSED",
+        category: "command_dispatch",
+        message: `ROSBridge connection ${this.id} is disposed`,
+        details: { connection: this.id, topic: options.topic },
+      });
+    }
+
+    const key = topicPublisherPoolKey(options);
+    let entry = this.topicPublisherPool.get(key);
+    if (!entry) {
+      entry = {
+        options,
+        references: 0,
+        topic: undefined,
+        lastError: undefined,
+      };
+      this.topicPublisherPool.set(key, entry);
+    }
+    entry.references += 1;
+
+    if (this.stateValue.state === "connected") {
+      this.bindTopicPublisher(entry);
+    }
+
+    let released = false;
+    return {
+      publish: (message: unknown): void => {
+        if (released) {
+          throw new RuntimeError({
+            code: "GGCS_ROSBRIDGE_COMMAND_DISPOSED",
+            category: "command_dispatch",
+            message: `ROSBridge topic Command for ${options.topic} is disposed`,
+            details: { connection: this.id, topic: options.topic },
+          });
+        }
+        this.publishTopic(key, entry, message);
+      },
+      release: (): void => {
+        if (released) return;
+        released = true;
+        const current = this.topicPublisherPool.get(key);
+        if (!current || current !== entry) return;
+        current.references -= 1;
+        if (current.references > 0) return;
+        this.unbindTopicPublisher(current);
+        this.topicPublisherPool.delete(key);
+      },
+    };
+  }
+
   private transition(next: ConnectionState): void {
     this.stateValue = next;
     notifySafely(this.listeners, next);
@@ -247,6 +364,7 @@ export class RosbridgeConnection implements Connection {
     this.sessionGeneration += 1;
     this.transition({ state: "connected", since: this.options.clock.wallNow() });
     this.bindAllTopics();
+    this.bindAllTopicPublishers();
   }
 
   private handleError(error: unknown): void {
@@ -269,6 +387,7 @@ export class RosbridgeConnection implements Connection {
     // Physical ROSLIB Topic objects belong to one live session generation.
     // Remove them before reconnect so no resource can keep using a dead object.
     this.unbindAllTopics();
+    this.unbindAllTopicPublishers();
     this.scheduleReconnectOrDisconnect();
   }
 
@@ -356,6 +475,113 @@ export class RosbridgeConnection implements Connection {
       topic.unsubscribe(listener);
     } catch {
       // Socket/session disposal must continue even if ROSLIB unsubscribe fails.
+    }
+  }
+
+  private bindAllTopicPublishers(): void {
+    for (const entry of this.topicPublisherPool.values()) {
+      this.bindTopicPublisher(entry);
+    }
+  }
+
+  private bindTopicPublisher(entry: TopicPublisherPoolEntry): void {
+    if (
+      this.disposed ||
+      this.stateValue.state !== "connected" ||
+      entry.topic !== undefined ||
+      entry.references === 0
+    ) {
+      return;
+    }
+
+    try {
+      const topic = this.client.createTopic(entry.options);
+      topic.advertise();
+      entry.topic = topic;
+      entry.lastError = undefined;
+    } catch (error) {
+      entry.topic = undefined;
+      entry.lastError = asTopicPublisherSetupError(error, entry.options);
+    }
+  }
+
+  private unbindAllTopicPublishers(): void {
+    for (const entry of this.topicPublisherPool.values()) {
+      this.unbindTopicPublisher(entry);
+    }
+  }
+
+  private unbindTopicPublisher(entry: TopicPublisherPoolEntry): void {
+    const topic = entry.topic;
+    const canNotifyLiveTransport = this.client.isConnected;
+    entry.topic = undefined;
+    entry.lastError = undefined;
+    if (!topic || !canNotifyLiveTransport) return;
+    try {
+      topic.unadvertise();
+    } catch {
+      // Runtime/session disposal must continue even if ROSLIB unadvertise fails.
+    }
+  }
+
+  private publishTopic(
+    key: string,
+    entry: TopicPublisherPoolEntry,
+    message: unknown,
+  ): void {
+    if (this.disposed) {
+      throw new RuntimeError({
+        code: "GGCS_ROSBRIDGE_CONNECTION_DISPOSED",
+        category: "command_dispatch",
+        message: `ROSBridge connection ${this.id} is disposed`,
+        details: { connection: this.id, topic: entry.options.topic },
+      });
+    }
+    if (this.topicPublisherPool.get(key) !== entry || entry.references === 0) {
+      throw new RuntimeError({
+        code: "GGCS_ROSBRIDGE_COMMAND_DISPOSED",
+        category: "command_dispatch",
+        message: `ROSBridge topic Command for ${entry.options.topic} is disposed`,
+        details: { connection: this.id, topic: entry.options.topic },
+      });
+    }
+    if (this.stateValue.state !== "connected") {
+      throw new RuntimeError({
+        code: "GGCS_ROSBRIDGE_COMMAND_UNAVAILABLE",
+        category: "command_dispatch",
+        message: `ROSBridge topic Command ${entry.options.topic} requires a connected transport`,
+        details: {
+          connection: this.id,
+          topic: entry.options.topic,
+          connectionState: this.stateValue.state,
+        },
+      });
+    }
+
+    if (entry.topic === undefined) {
+      this.bindTopicPublisher(entry);
+    }
+    const topic = entry.topic;
+    if (!topic) {
+      throw (
+        entry.lastError ??
+        new RuntimeError({
+          code: "GGCS_ROSBRIDGE_TOPIC_PUBLISHER_SETUP_FAILURE",
+          category: "command_dispatch",
+          message: `ROSBridge topic publisher setup failed for ${entry.options.topic}`,
+          details: {
+            connection: this.id,
+            topic: entry.options.topic,
+            messageType: entry.options.messageType,
+          },
+        })
+      );
+    }
+
+    try {
+      topic.publish(message);
+    } catch (error) {
+      throw asTopicPublishError(error, entry.options);
     }
   }
 }

@@ -1,6 +1,8 @@
 import {
   RuntimeError,
   createSourceController,
+  type Command,
+  type CommandDispatchReceipt,
   type StaleObservation,
   type LiveResource,
   type ResourceProvider,
@@ -28,6 +30,7 @@ export const ROSBRIDGE_PLUGIN_ID = "ggcs:transport-rosbridge" as const;
 export const ROSBRIDGE_PROVIDER_IDS = {
   connection: "rosbridge:connection",
   topicSource: "rosbridge:topic-source",
+  topicCommand: "rosbridge:topic-command",
 } as const;
 
 export interface PreparedRosbridgeConnection {
@@ -47,6 +50,18 @@ export interface PreparedRosbridgeTopicSource {
   readonly messageType: string;
   readonly subscription: RosbridgeSubscriptionOptions;
   readonly staleAfterMs?: number;
+}
+
+export interface RosbridgePublishOptions {
+  readonly queueSize?: number;
+  readonly latch?: boolean;
+}
+
+export interface PreparedRosbridgeTopicCommand {
+  readonly connection: ResourceId;
+  readonly topic: string;
+  readonly messageType: string;
+  readonly publish: RosbridgePublishOptions;
 }
 
 export interface RosbridgeTransportPluginOptions {
@@ -75,6 +90,18 @@ function invalidTopicSource(
 ): never {
   throw new RuntimeError({
     code: "GGCS_ROSBRIDGE_TOPIC_SOURCE_CONFIG_INVALID",
+    category: "configuration",
+    message,
+    ...(details !== undefined ? { details } : {}),
+  });
+}
+
+function invalidTopicCommand(
+  message: string,
+  details?: Readonly<Record<string, unknown>>,
+): never {
+  throw new RuntimeError({
+    code: "GGCS_ROSBRIDGE_TOPIC_COMMAND_CONFIG_INVALID",
     category: "configuration",
     message,
     ...(details !== undefined ? { details } : {}),
@@ -157,6 +184,16 @@ function parseNonNegativeInteger(
 ): number {
   if (!Number.isInteger(value) || (value as number) < 0) {
     invalidTopicSource(`ROSBridge topic subscription.${field} must be a non-negative integer`, {
+      field,
+      value,
+    });
+  }
+  return value as number;
+}
+
+function parseCommandNonNegativeInteger(value: unknown, field: string): number {
+  if (!Number.isInteger(value) || (value as number) < 0) {
+    invalidTopicCommand(`ROSBridge topic publish.${field} must be a non-negative integer`, {
       field,
       value,
     });
@@ -255,6 +292,67 @@ function parseTopicSourceDefinition(
   };
 }
 
+function parsePublish(value: unknown): RosbridgePublishOptions {
+  if (value === undefined) return {};
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return invalidTopicCommand("ROSBridge topic publish must be an object");
+  }
+  const record = value as Readonly<Record<string, unknown>>;
+  const allowed = new Set(["queueSize", "latch"]);
+  for (const key of Object.keys(record)) {
+    if (!allowed.has(key)) {
+      invalidTopicCommand(`ROSBridge topic publish has unknown field ${key}`, { field: key });
+    }
+  }
+
+  if (record.latch !== undefined && typeof record.latch !== "boolean") {
+    invalidTopicCommand("ROSBridge topic publish.latch must be boolean", {
+      value: record.latch,
+    });
+  }
+
+  return {
+    ...(record.queueSize !== undefined
+      ? { queueSize: parseCommandNonNegativeInteger(record.queueSize, "queueSize") }
+      : {}),
+    ...(record.latch !== undefined ? { latch: record.latch } : {}),
+  };
+}
+
+function parseTopicCommandDefinition(
+  definition: BaseResourceDefinition,
+  config: Readonly<Record<string, unknown>>,
+): PreparedRosbridgeTopicCommand {
+  if (typeof config.connection !== "string" || config.connection.length === 0) {
+    invalidTopicCommand(`Resource ${definition.id} requires a connection resource id`);
+  }
+  if (typeof config.topic !== "string" || !/^\/[^\s]*$/.test(config.topic)) {
+    invalidTopicCommand(`Resource ${definition.id} requires an absolute ROS topic name`, {
+      topic: config.topic,
+    });
+  }
+  if (!isCanonicalRosMessageType(config.messageType)) {
+    invalidTopicCommand(
+      `Resource ${definition.id} requires canonical ROS messageType package/msg/Type`,
+      { messageType: config.messageType },
+    );
+  }
+  const expectedType = rosMessageTypeId(config.messageType);
+  if (definition.type !== expectedType) {
+    invalidTopicCommand(
+      `Resource ${definition.id} semantic type must match ROS messageType ${config.messageType}`,
+      { expectedType, actualType: definition.type },
+    );
+  }
+
+  return {
+    connection: config.connection,
+    topic: config.topic,
+    messageType: config.messageType,
+    publish: parsePublish(config.publish),
+  };
+}
+
 function markConnectionLoss(controller: SourceController<RosMessage>, now: number): void {
   const current = controller.source.current();
   if (current.state !== "fresh") return;
@@ -271,6 +369,14 @@ function topicOptions(prepared: PreparedRosbridgeTopicSource): RosbridgeTopicOpt
     topic: prepared.topic,
     messageType: prepared.messageType,
     ...prepared.subscription,
+  };
+}
+
+function commandTopicOptions(prepared: PreparedRosbridgeTopicCommand): RosbridgeTopicOptions {
+  return {
+    topic: prepared.topic,
+    messageType: prepared.messageType,
+    ...prepared.publish,
   };
 }
 
@@ -402,12 +508,85 @@ export function createRosbridgeTransportPlugin(options: RosbridgeTransportPlugin
     },
   };
 
+  const topicCommandProvider: ResourceProvider<PreparedRosbridgeTopicCommand> = {
+    id: ROSBRIDGE_PROVIDER_IDS.topicCommand,
+    prepare(definition, context) {
+      const config = context.assertObjectConfig(definition, {
+        allowed: ["connection", "topic", "messageType", "publish"],
+        required: ["connection", "topic", "messageType"],
+      });
+      const prepared = parseTopicCommandDefinition(definition, config);
+      context.resourceType(prepared.connection);
+      context.resolveType(definition.type);
+      return {
+        id: definition.id,
+        provider: ROSBRIDGE_PROVIDER_IDS.topicCommand,
+        type: definition.type,
+        dependencies: [prepared.connection],
+        prepared,
+      };
+    },
+    create(definition, context): LiveResource {
+      const connection = context.getResource(definition.prepared.connection);
+      if (!(connection instanceof RosbridgeConnection)) {
+        throw new RuntimeError({
+          code: "GGCS_ROSBRIDGE_TOPIC_COMMAND_CONNECTION_INVALID",
+          category: "provider_create",
+          message: `Resource ${definition.id} requires a ROSBridge Connection`,
+          details: {
+            resource: definition.id,
+            connection: definition.prepared.connection,
+          },
+        });
+      }
+
+      const publisher = connection.acquireTopicPublisher(
+        commandTopicOptions(definition.prepared),
+      );
+      const command: Command<RosMessage> = {
+        id: definition.id,
+        kind: "command",
+        async send(message: RosMessage): Promise<CommandDispatchReceipt> {
+          if (message === null || typeof message !== "object" || Array.isArray(message)) {
+            throw new RuntimeError({
+              code: "GGCS_ROSBRIDGE_COMMAND_MESSAGE_INVALID",
+              category: "command_dispatch",
+              message: `ROSBridge topic Command ${definition.prepared.topic} requires a raw ROS message object`,
+              details: {
+                resource: definition.id,
+                topic: definition.prepared.topic,
+                messageType: definition.prepared.messageType,
+              },
+            });
+          }
+          publisher.publish(message);
+          return {
+            dispatchedAt: context.clock.wallNow(),
+            metadata: {
+              connection: definition.prepared.connection,
+              topic: definition.prepared.topic,
+              messageType: definition.prepared.messageType,
+              sessionGeneration: connection.generation(),
+            },
+          };
+        },
+      };
+
+      return {
+        resource: command,
+        dispose(): void {
+          publisher.release();
+        },
+      };
+    },
+  };
+
   return definePlugin({
     manifest: {
       id: ROSBRIDGE_PLUGIN_ID,
       version: "0.1.0",
       ggcsApi: "^0.1.0",
     },
-    resourceProviders: [connectionProvider, topicSourceProvider],
+    resourceProviders: [connectionProvider, topicSourceProvider, topicCommandProvider],
   });
 }
