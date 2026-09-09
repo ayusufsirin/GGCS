@@ -71,7 +71,7 @@ const compiled = compileApplication(
         id: "fixture.parameters",
         provider: ROSBRIDGE_PROVIDER_IDS.parameterProvider,
         type: CORE_TYPE_IDS.object,
-        config: { connection: "robot", timeoutMs: 5_000 },
+        config: { connection: "robot", timeoutMs: 15_000 },
       },
     ],
   },
