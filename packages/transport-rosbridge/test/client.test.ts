@@ -33,4 +33,23 @@ describe("ROSLIB transport adapter", () => {
     expect(() => topic.publish({ data: 42 })).not.toThrow();
     expect(() => topic.unadvertise()).not.toThrow();
   });
+  it("can issue a service call through the ROSLIB adapter", () => {
+    const client = defaultRosbridgeClientFactory.create();
+    const service = client.createService({
+      service: "/ggcs_test/trigger",
+      serviceType: "std_srvs/srv/Trigger",
+    });
+
+    // ROSLIB queues call_service frames while the socket is not connected.
+    // This adapter-level regression verifies raw request construction and the
+    // pinned @types/roslib callService signature without external networking.
+    expect(() =>
+      service.call(
+        {},
+        () => undefined,
+        () => undefined,
+      ),
+    ).not.toThrow();
+  });
+
 });

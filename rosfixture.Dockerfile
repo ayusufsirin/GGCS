@@ -18,6 +18,7 @@ RUN ggcs-configure-registries \
     && apt-get install -y --no-install-recommends \
       ros-${ROS_DISTRO}-rclpy \
       ros-${ROS_DISTRO}-std-msgs \
+      ros-${ROS_DISTRO}-std-srvs \
       ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
     && rm -rf /var/lib/apt/lists/*
 

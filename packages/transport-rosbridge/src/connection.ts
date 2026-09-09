@@ -11,6 +11,8 @@ import type { ConnectionId } from "@ggcs/schema";
 import type {
   RosbridgeClient,
   RosbridgeClientFactory,
+  RosbridgeService,
+  RosbridgeServiceOptions,
   RosbridgeTopic,
   RosbridgeTopicListener,
   RosbridgeTopicOptions,
@@ -50,8 +52,32 @@ interface TopicPublisherPoolEntry {
   lastError: RuntimeError | undefined;
 }
 
+interface ServicePendingCall {
+  readonly owner: symbol;
+  readonly onSuccess: (response: unknown) => void;
+  readonly onError: (error: RuntimeError) => void;
+  active: boolean;
+}
+
+interface ServicePoolEntry {
+  readonly options: RosbridgeServiceOptions;
+  readonly pending: Set<ServicePendingCall>;
+  references: number;
+  service: RosbridgeService | undefined;
+  lastError: RuntimeError | undefined;
+}
+
 export interface RosbridgeTopicPublisherLease {
   publish(message: unknown): void;
+  release(): void;
+}
+
+export interface RosbridgeServiceClientLease {
+  call(
+    request: unknown,
+    onSuccess: (response: unknown) => void,
+    onError: (error: RuntimeError) => void,
+  ): Subscription;
   release(): void;
 }
 
@@ -117,6 +143,40 @@ function asTopicPublishError(
   });
 }
 
+function asServiceSetupError(
+  error: unknown,
+  options: RosbridgeServiceOptions,
+): RuntimeError {
+  if (error instanceof RuntimeError) return error;
+  return new RuntimeError({
+    code: "GGCS_ROSBRIDGE_SERVICE_CLIENT_SETUP_FAILURE",
+    category: "invocation_failure",
+    message: `ROSBridge service client setup failed for ${options.service}`,
+    details: {
+      service: options.service,
+      serviceType: options.serviceType,
+    },
+    cause: error,
+  });
+}
+
+function asServiceCallError(
+  error: unknown,
+  options: RosbridgeServiceOptions,
+): RuntimeError {
+  if (error instanceof RuntimeError) return error;
+  return new RuntimeError({
+    code: "GGCS_ROSBRIDGE_SERVICE_FAILURE",
+    category: "invocation_failure",
+    message: `ROSBridge service call failed for ${options.service}`,
+    details: {
+      service: options.service,
+      serviceType: options.serviceType,
+    },
+    cause: error,
+  });
+}
+
 function notifySafely(
   listeners: ReadonlySet<(state: ConnectionState) => void>,
   state: ConnectionState,
@@ -149,6 +209,10 @@ function topicPublisherPoolKey(options: RosbridgeTopicOptions): string {
   ]);
 }
 
+function servicePoolKey(options: RosbridgeServiceOptions): string {
+  return JSON.stringify([options.service, options.serviceType]);
+}
+
 export class RosbridgeConnection implements Connection {
   readonly kind = "connection" as const;
   readonly id: ConnectionId;
@@ -157,6 +221,7 @@ export class RosbridgeConnection implements Connection {
   private readonly client: RosbridgeClient;
   private readonly topicPool = new Map<string, TopicPoolEntry>();
   private readonly topicPublisherPool = new Map<string, TopicPublisherPoolEntry>();
+  private readonly servicePool = new Map<string, ServicePoolEntry>();
   private stateValue: ConnectionState;
   private reconnectTask: ScheduledTask | undefined;
   private disposed = false;
@@ -206,8 +271,18 @@ export class RosbridgeConnection implements Connection {
     this.reconnectTask = undefined;
     this.unbindAllTopics();
     this.unbindAllTopicPublishers();
+    this.failAllServiceCalls(
+      new RuntimeError({
+        code: "GGCS_ROSBRIDGE_CONNECTION_DISPOSED",
+        category: "invocation_failure",
+        message: `ROSBridge connection ${this.id} is disposed`,
+        details: { connection: this.id },
+      }),
+    );
+    this.unbindAllServices();
     this.topicPool.clear();
     this.topicPublisherPool.clear();
+    this.servicePool.clear();
     try {
       this.client.close();
     } catch {
@@ -338,6 +413,168 @@ export class RosbridgeConnection implements Connection {
     };
   }
 
+  /**
+   * Acquire a Procedure lease on a pooled ROS service client. Calls are never
+   * replayed across reconnects: connection loss terminally fails every active
+   * call from the dead session generation.
+   */
+  acquireServiceClient(
+    options: RosbridgeServiceOptions,
+  ): RosbridgeServiceClientLease {
+    if (this.disposed) {
+      throw new RuntimeError({
+        code: "GGCS_ROSBRIDGE_CONNECTION_DISPOSED",
+        category: "invocation_failure",
+        message: `ROSBridge connection ${this.id} is disposed`,
+        details: { connection: this.id, service: options.service },
+      });
+    }
+
+    const key = servicePoolKey(options);
+    let entry = this.servicePool.get(key);
+    if (!entry) {
+      entry = {
+        options,
+        pending: new Set(),
+        references: 0,
+        service: undefined,
+        lastError: undefined,
+      };
+      this.servicePool.set(key, entry);
+    }
+    const acquiredEntry = entry;
+    const owner = Symbol(options.service);
+    acquiredEntry.references += 1;
+
+    if (this.stateValue.state === "connected") {
+      this.bindService(acquiredEntry);
+    }
+
+    let released = false;
+    return {
+      call: (request, onSuccess, onError): Subscription => {
+        if (released) {
+          throw new RuntimeError({
+            code: "GGCS_ROSBRIDGE_SERVICE_DISPOSED",
+            category: "invocation_failure",
+            message: `ROSBridge service Procedure for ${options.service} is disposed`,
+            details: { connection: this.id, service: options.service },
+          });
+        }
+        if (this.disposed) {
+          throw new RuntimeError({
+            code: "GGCS_ROSBRIDGE_CONNECTION_DISPOSED",
+            category: "invocation_failure",
+            message: `ROSBridge connection ${this.id} is disposed`,
+            details: { connection: this.id, service: options.service },
+          });
+        }
+        if (this.servicePool.get(key) !== acquiredEntry || acquiredEntry.references === 0) {
+          throw new RuntimeError({
+            code: "GGCS_ROSBRIDGE_SERVICE_DISPOSED",
+            category: "invocation_failure",
+            message: `ROSBridge service Procedure for ${options.service} is disposed`,
+            details: { connection: this.id, service: options.service },
+          });
+        }
+        if (this.stateValue.state !== "connected") {
+          throw new RuntimeError({
+            code: "GGCS_ROSBRIDGE_SERVICE_UNAVAILABLE",
+            category: "invocation_failure",
+            message: `ROSBridge service ${options.service} requires a connected transport`,
+            details: {
+              connection: this.id,
+              service: options.service,
+              connectionState: this.stateValue.state,
+            },
+          });
+        }
+
+        if (acquiredEntry.service === undefined) this.bindService(acquiredEntry);
+        const service = acquiredEntry.service;
+        if (!service) {
+          throw (
+            acquiredEntry.lastError ??
+            new RuntimeError({
+              code: "GGCS_ROSBRIDGE_SERVICE_CLIENT_SETUP_FAILURE",
+              category: "invocation_failure",
+              message: `ROSBridge service client is unavailable for ${options.service}`,
+              details: {
+                connection: this.id,
+                service: options.service,
+                serviceType: options.serviceType,
+              },
+            })
+          );
+        }
+
+        const pending: ServicePendingCall = {
+          owner,
+          onSuccess,
+          onError,
+          active: true,
+        };
+        acquiredEntry.pending.add(pending);
+
+        const finish = (): boolean => {
+          if (!pending.active) return false;
+          pending.active = false;
+          acquiredEntry.pending.delete(pending);
+          return true;
+        };
+
+        try {
+          service.call(
+            request,
+            (response) => {
+              if (!finish()) return;
+              try {
+                onSuccess(response);
+              } catch {
+                // Invocation observers are isolated from transport callbacks.
+              }
+            },
+            (error) => {
+              if (!finish()) return;
+              try {
+                onError(asServiceCallError(error, options));
+              } catch {
+                // Invocation observers are isolated from transport callbacks.
+              }
+            },
+          );
+        } catch (error) {
+          finish();
+          throw asServiceCallError(error, options);
+        }
+
+        return createSubscription(() => {
+          finish();
+        });
+      },
+      release: (): void => {
+        if (released) return;
+        released = true;
+        const current = this.servicePool.get(key);
+        if (!current || current !== acquiredEntry) return;
+        this.failServiceCallsForOwner(
+          current,
+          owner,
+          new RuntimeError({
+            code: "GGCS_ROSBRIDGE_SERVICE_DISPOSED",
+            category: "invocation_failure",
+            message: `ROSBridge service Procedure for ${options.service} is disposed`,
+            details: { connection: this.id, service: options.service },
+          }),
+        );
+        current.references -= 1;
+        if (current.references > 0) return;
+        this.unbindService(current);
+        this.servicePool.delete(key);
+      },
+    };
+  }
+
   private transition(next: ConnectionState): void {
     this.stateValue = next;
     notifySafely(this.listeners, next);
@@ -366,6 +603,7 @@ export class RosbridgeConnection implements Connection {
     this.transition({ state: "connected", since: this.options.clock.wallNow() });
     this.bindAllTopics();
     this.bindAllTopicPublishers();
+    this.bindAllServices();
   }
 
   private handleError(error: unknown): void {
@@ -389,6 +627,15 @@ export class RosbridgeConnection implements Connection {
     // Remove them before reconnect so no resource can keep using a dead object.
     this.unbindAllTopics();
     this.unbindAllTopicPublishers();
+    this.failAllServiceCalls(
+      new RuntimeError({
+        code: "GGCS_ROSBRIDGE_SERVICE_CONNECTION_LOST",
+        category: "invocation_failure",
+        message: `ROSBridge connection ${this.id} was lost during a service invocation`,
+        details: { connection: this.id, sessionGeneration: this.sessionGeneration },
+      }),
+    );
+    this.unbindAllServices();
     this.scheduleReconnectOrDisconnect();
   }
 
@@ -522,6 +769,76 @@ export class RosbridgeConnection implements Connection {
       topic.unadvertise();
     } catch {
       // Runtime/session disposal must continue even if ROSLIB unadvertise fails.
+    }
+  }
+
+  private bindAllServices(): void {
+    for (const entry of this.servicePool.values()) this.bindService(entry);
+  }
+
+  private bindService(entry: ServicePoolEntry): void {
+    if (
+      this.disposed ||
+      this.stateValue.state !== "connected" ||
+      entry.service !== undefined ||
+      entry.references === 0
+    ) {
+      return;
+    }
+    try {
+      entry.service = this.client.createService(entry.options);
+      entry.lastError = undefined;
+    } catch (error) {
+      entry.service = undefined;
+      entry.lastError = asServiceSetupError(error, entry.options);
+    }
+  }
+
+  private unbindAllServices(): void {
+    for (const entry of this.servicePool.values()) this.unbindService(entry);
+  }
+
+  private unbindService(entry: ServicePoolEntry): void {
+    entry.service = undefined;
+    entry.lastError = undefined;
+  }
+
+  private failAllServiceCalls(error: RuntimeError): void {
+    for (const entry of this.servicePool.values()) {
+      this.failPendingServiceCalls(entry, error);
+    }
+  }
+
+  private failServiceCallsForOwner(
+    entry: ServicePoolEntry,
+    owner: symbol,
+    error: RuntimeError,
+  ): void {
+    for (const pending of [...entry.pending]) {
+      if (pending.owner !== owner || !pending.active) continue;
+      pending.active = false;
+      entry.pending.delete(pending);
+      try {
+        pending.onError(error);
+      } catch {
+        // Invocation observers are isolated from transport lifecycle.
+      }
+    }
+  }
+
+  private failPendingServiceCalls(
+    entry: ServicePoolEntry,
+    error: RuntimeError,
+  ): void {
+    for (const pending of [...entry.pending]) {
+      if (!pending.active) continue;
+      pending.active = false;
+      entry.pending.delete(pending);
+      try {
+        pending.onError(error);
+      } catch {
+        // Invocation observers are isolated from transport lifecycle.
+      }
     }
   }
 

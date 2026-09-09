@@ -1,23 +1,32 @@
 import {
   RuntimeError,
+  createInvocationController,
   createSourceController,
   type Command,
   type CommandDispatchReceipt,
-  type StaleObservation,
+  type Invocation,
   type LiveResource,
-  type ResourceProvider,
+  type Procedure,
   type SourceController,
+  type StaleObservation,
+  type Subscription,
+  type ResourceProvider,
 } from "@ggcs/core";
 import { definePlugin } from "@ggcs/plugin-sdk";
 import {
   isCanonicalRosMessageType,
+  isCanonicalRosServiceType,
   rosMessageTypeId,
+  rosServiceTypeId,
   type RosMessage,
+  type RosServiceRequest,
+  type RosServiceResponse,
 } from "@ggcs/ros";
 import type { BaseResourceDefinition, ResourceId } from "@ggcs/schema";
 import {
   defaultRosbridgeClientFactory,
   type RosbridgeClientFactory,
+  type RosbridgeServiceOptions,
   type RosbridgeTopicOptions,
 } from "./client.js";
 import {
@@ -31,6 +40,7 @@ export const ROSBRIDGE_PROVIDER_IDS = {
   connection: "rosbridge:connection",
   topicSource: "rosbridge:topic-source",
   topicCommand: "rosbridge:topic-command",
+  serviceProcedure: "rosbridge:service-procedure",
 } as const;
 
 export interface PreparedRosbridgeConnection {
@@ -64,9 +74,18 @@ export interface PreparedRosbridgeTopicCommand {
   readonly publish: RosbridgePublishOptions;
 }
 
+export interface PreparedRosbridgeServiceProcedure {
+  readonly connection: ResourceId;
+  readonly service: string;
+  readonly serviceType: string;
+  readonly timeoutMs: number;
+}
+
 export interface RosbridgeTransportPluginOptions {
   readonly clientFactory?: RosbridgeClientFactory;
 }
+
+const DEFAULT_SERVICE_TIMEOUT_MS = 10_000;
 
 const DEFAULT_RECONNECT: RosbridgeReconnectPolicy = {
   enabled: true,
@@ -102,6 +121,18 @@ function invalidTopicCommand(
 ): never {
   throw new RuntimeError({
     code: "GGCS_ROSBRIDGE_TOPIC_COMMAND_CONFIG_INVALID",
+    category: "configuration",
+    message,
+    ...(details !== undefined ? { details } : {}),
+  });
+}
+
+function invalidServiceProcedure(
+  message: string,
+  details?: Readonly<Record<string, unknown>>,
+): never {
+  throw new RuntimeError({
+    code: "GGCS_ROSBRIDGE_SERVICE_PROCEDURE_CONFIG_INVALID",
     category: "configuration",
     message,
     ...(details !== undefined ? { details } : {}),
@@ -353,6 +384,55 @@ function parseTopicCommandDefinition(
   };
 }
 
+function parseServiceProcedureDefinition(
+  definition: BaseResourceDefinition,
+  config: Readonly<Record<string, unknown>>,
+): PreparedRosbridgeServiceProcedure {
+  if (typeof config.connection !== "string" || config.connection.length === 0) {
+    invalidServiceProcedure(`Resource ${definition.id} requires a connection resource id`);
+  }
+  if (typeof config.service !== "string" || !/^\/[^\s]*$/.test(config.service)) {
+    invalidServiceProcedure(`Resource ${definition.id} requires an absolute ROS service name`, {
+      service: config.service,
+    });
+  }
+  if (!isCanonicalRosServiceType(config.serviceType)) {
+    invalidServiceProcedure(
+      `Resource ${definition.id} requires canonical ROS serviceType package/srv/Type`,
+      { serviceType: config.serviceType },
+    );
+  }
+  const expectedType = rosServiceTypeId(config.serviceType);
+  if (definition.type !== expectedType) {
+    invalidServiceProcedure(
+      `Resource ${definition.id} semantic type must match ROS serviceType ${config.serviceType}`,
+      { expectedType, actualType: definition.type },
+    );
+  }
+  const timeoutMs = config.timeoutMs ?? DEFAULT_SERVICE_TIMEOUT_MS;
+  if (typeof timeoutMs !== "number" || !Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    invalidServiceProcedure(`Resource ${definition.id} timeoutMs must be a positive finite number`, {
+      timeoutMs,
+    });
+  }
+  return {
+    connection: config.connection,
+    service: config.service,
+    serviceType: config.serviceType,
+    timeoutMs,
+  };
+}
+
+function serviceOptions(
+  prepared: PreparedRosbridgeServiceProcedure,
+): RosbridgeServiceOptions {
+  return { service: prepared.service, serviceType: prepared.serviceType };
+}
+
+function isRosRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
 function markConnectionLoss(controller: SourceController<RosMessage>, now: number): void {
   const current = controller.source.current();
   if (current.state !== "fresh") return;
@@ -581,12 +661,155 @@ export function createRosbridgeTransportPlugin(options: RosbridgeTransportPlugin
     },
   };
 
+  const serviceProcedureProvider: ResourceProvider<PreparedRosbridgeServiceProcedure> = {
+    id: ROSBRIDGE_PROVIDER_IDS.serviceProcedure,
+    prepare(definition, context) {
+      const config = context.assertObjectConfig(definition, {
+        allowed: ["connection", "service", "serviceType", "timeoutMs"],
+        required: ["connection", "service", "serviceType"],
+      });
+      const prepared = parseServiceProcedureDefinition(definition, config);
+      context.resourceType(prepared.connection);
+      context.resolveType(definition.type);
+      return {
+        id: definition.id,
+        provider: ROSBRIDGE_PROVIDER_IDS.serviceProcedure,
+        type: definition.type,
+        dependencies: [prepared.connection],
+        prepared,
+      };
+    },
+    create(definition, context): LiveResource {
+      const connection = context.getResource(definition.prepared.connection);
+      if (!(connection instanceof RosbridgeConnection)) {
+        throw new RuntimeError({
+          code: "GGCS_ROSBRIDGE_SERVICE_CONNECTION_INVALID",
+          category: "provider_create",
+          message: `Resource ${definition.id} requires a ROSBridge Connection`,
+          details: {
+            resource: definition.id,
+            connection: definition.prepared.connection,
+          },
+        });
+      }
+
+      const client = connection.acquireServiceClient(serviceOptions(definition.prepared));
+      let disposed = false;
+      const procedure: Procedure<RosServiceRequest, RosServiceResponse> = {
+        id: definition.id,
+        kind: "procedure",
+        invoke(input: RosServiceRequest): Invocation<RosServiceResponse> {
+          const controller = createInvocationController<RosServiceResponse>({
+            clock: context.clock,
+            failureCode: "GGCS_ROSBRIDGE_SERVICE_FAILURE",
+          });
+
+          if (disposed) {
+            controller.fail(
+              new RuntimeError({
+                code: "GGCS_ROSBRIDGE_SERVICE_DISPOSED",
+                category: "invocation_failure",
+                message: `ROSBridge service Procedure ${definition.id} is disposed`,
+                details: { resource: definition.id, service: definition.prepared.service },
+              }),
+            );
+            return controller.invocation;
+          }
+          if (!isRosRecord(input)) {
+            controller.fail(
+              new RuntimeError({
+                code: "GGCS_ROSBRIDGE_SERVICE_REQUEST_INVALID",
+                category: "invocation_failure",
+                message: `ROSBridge service ${definition.prepared.service} requires a raw ROS request object`,
+                details: {
+                  resource: definition.id,
+                  service: definition.prepared.service,
+                  serviceType: definition.prepared.serviceType,
+                },
+              }),
+            );
+            return controller.invocation;
+          }
+
+          let callSubscription: Subscription | undefined;
+          let stateSubscription: Subscription | undefined;
+          const timeoutTask = context.clock.schedule(definition.prepared.timeoutMs, () => {
+            controller.timeout(
+              new RuntimeError({
+                code: "GGCS_ROSBRIDGE_SERVICE_TIMEOUT",
+                category: "invocation_timeout",
+                message: `ROSBridge service ${definition.prepared.service} timed out after ${definition.prepared.timeoutMs}ms`,
+                details: {
+                  resource: definition.id,
+                  connection: definition.prepared.connection,
+                  service: definition.prepared.service,
+                  serviceType: definition.prepared.serviceType,
+                  timeoutMs: definition.prepared.timeoutMs,
+                },
+              }),
+            );
+          });
+          const detachWhenTerminal = (): void => {
+            if (controller.invocation.current().state === "pending") return;
+            timeoutTask.cancel();
+            callSubscription?.unsubscribe();
+            stateSubscription?.unsubscribe();
+          };
+          stateSubscription = controller.invocation.subscribe(detachWhenTerminal);
+
+          try {
+            callSubscription = client.call(
+              input,
+              (response) => {
+                if (!isRosRecord(response)) {
+                  controller.fail(
+                    new RuntimeError({
+                      code: "GGCS_ROSBRIDGE_SERVICE_RESPONSE_INVALID",
+                      category: "invocation_failure",
+                      message: `ROSBridge service ${definition.prepared.service} returned a non-object response`,
+                      details: {
+                        resource: definition.id,
+                        service: definition.prepared.service,
+                        serviceType: definition.prepared.serviceType,
+                      },
+                    }),
+                  );
+                  return;
+                }
+                controller.succeed(response as RosServiceResponse);
+              },
+              (error) => controller.fail(error),
+            );
+          } catch (error) {
+            controller.fail(error);
+          }
+          detachWhenTerminal();
+          return controller.invocation;
+        },
+      };
+
+      return {
+        resource: procedure,
+        dispose(): void {
+          if (disposed) return;
+          disposed = true;
+          client.release();
+        },
+      };
+    },
+  };
+
   return definePlugin({
     manifest: {
       id: ROSBRIDGE_PLUGIN_ID,
       version: "0.1.0",
       ggcsApi: "^0.1.0",
     },
-    resourceProviders: [connectionProvider, topicSourceProvider, topicCommandProvider],
+    resourceProviders: [
+      connectionProvider,
+      topicSourceProvider,
+      topicCommandProvider,
+      serviceProcedureProvider,
+    ],
   });
 }

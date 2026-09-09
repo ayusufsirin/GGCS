@@ -15,6 +15,19 @@ export interface RosbridgeTopicOptions {
 
 export type RosbridgeTopicListener = (message: unknown) => void;
 
+export interface RosbridgeServiceOptions {
+  readonly service: string;
+  readonly serviceType: string;
+}
+
+export interface RosbridgeService {
+  call(
+    request: unknown,
+    onSuccess: (response: unknown) => void,
+    onError: (error: unknown) => void,
+  ): void;
+}
+
 export interface RosbridgeTopic {
   subscribe(listener: RosbridgeTopicListener): void;
   unsubscribe(listener: RosbridgeTopicListener): void;
@@ -34,6 +47,7 @@ export interface RosbridgeClient {
   connect(url: string): void;
   close(): void;
   createTopic(options: RosbridgeTopicOptions): RosbridgeTopic;
+  createService(options: RosbridgeServiceOptions): RosbridgeService;
 }
 
 export interface RosbridgeClientFactory {
@@ -110,6 +124,32 @@ class RoslibTopic implements RosbridgeTopic {
   }
 }
 
+class RoslibService implements RosbridgeService {
+  private readonly service: ROSLIB.Service;
+
+  constructor(ros: ROSLIB.Ros, options: RosbridgeServiceOptions) {
+    this.service = new ROSLIB.Service({
+      ros,
+      name: options.service,
+      serviceType: options.serviceType,
+    });
+  }
+
+  call(
+    request: unknown,
+    onSuccess: (response: unknown) => void,
+    onError: (error: unknown) => void,
+  ): void {
+    this.service.callService(
+      new ROSLIB.ServiceRequest(
+        request as ConstructorParameters<typeof ROSLIB.ServiceRequest>[0],
+      ),
+      onSuccess,
+      onError as (error: string) => void,
+    );
+  }
+}
+
 class RoslibClient implements RosbridgeClient {
   private readonly ros = new ROSLIB.Ros({});
 
@@ -131,6 +171,10 @@ class RoslibClient implements RosbridgeClient {
 
   createTopic(options: RosbridgeTopicOptions): RosbridgeTopic {
     return new RoslibTopic(this.ros, options);
+  }
+
+  createService(options: RosbridgeServiceOptions): RosbridgeService {
+    return new RoslibService(this.ros, options);
   }
 }
 

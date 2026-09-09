@@ -1,0 +1,19 @@
+{
+  "name": "@ggcs/example-rosbridge-service-headless",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@ggcs/core": "workspace:*",
+    "@ggcs/ros": "workspace:*",
+    "@ggcs/schema": "workspace:*",
+    "@ggcs/transport-rosbridge": "workspace:*"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "start": "node dist/index.js"
+  },
+  "devDependencies": {
+    "typescript": "5.8.3"
+  }
+}

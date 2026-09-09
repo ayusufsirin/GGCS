@@ -21,6 +21,8 @@ import {
   type RosbridgeClientEvent,
   type RosbridgeClientFactory,
   type RosbridgeClientListener,
+  type RosbridgeService,
+  type RosbridgeServiceOptions,
   type RosbridgeTopic,
   type RosbridgeTopicListener,
   type RosbridgeTopicOptions,
@@ -101,6 +103,10 @@ class FakeRosbridgeClient implements RosbridgeClient {
     this.nextAdvertiseError = undefined;
     this.topics.push(topic);
     return topic;
+  }
+
+  createService(_options: RosbridgeServiceOptions): RosbridgeService {
+    throw new Error("Topic/connection test must not create services");
   }
 
   open(): void {

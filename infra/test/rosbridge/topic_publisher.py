@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
+import time
+
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float64
+from std_srvs.srv import Trigger
 
 
 class TopicFixture(Node):
@@ -17,11 +20,20 @@ class TopicFixture(Node):
         self.command_subscription = self.create_subscription(
             Float64, "/ggcs_test/command", self.observe_command, 10
         )
+        self.trigger_service = self.create_service(
+            Trigger, "/ggcs_test/trigger", self.handle_trigger
+        )
+        self.slow_trigger_service = self.create_service(
+            Trigger, "/ggcs_test/slow_trigger", self.handle_slow_trigger
+        )
         self.get_logger().info(
             "M02 fixture publishing std_msgs/msg/Float64 on /ggcs_test/temperature"
         )
         self.get_logger().info(
             "M02 fixture observing /ggcs_test/command and echoing to /ggcs_test/command_observed"
+        )
+        self.get_logger().info(
+            "M02 fixture serving std_srvs/srv/Trigger on /ggcs_test/trigger and /ggcs_test/slow_trigger"
         )
         self.value = 31.5
         self.timer = self.create_timer(0.2, self.publish_sample)
@@ -43,6 +55,25 @@ class TopicFixture(Node):
         observed = Float64()
         observed.data = message.data
         self.command_observed_publisher.publish(observed)
+
+    def handle_trigger(
+        self, request: Trigger.Request, response: Trigger.Response
+    ) -> Trigger.Response:
+        del request
+        response.success = True
+        response.message = "ggcs-service-ok"
+        self.get_logger().info("M02 fixture handled /ggcs_test/trigger")
+        return response
+
+    def handle_slow_trigger(
+        self, request: Trigger.Request, response: Trigger.Response
+    ) -> Trigger.Response:
+        del request
+        self.get_logger().info("M02 fixture handling slow trigger")
+        time.sleep(2.0)
+        response.success = True
+        response.message = "ggcs-service-slow-ok"
+        return response
 
 
 def main() -> None:
