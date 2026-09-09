@@ -111,10 +111,6 @@ const ROSAPI_SERVICES = {
     service: "/rosapi/nodes",
     serviceType: "rosapi_msgs/srv/Nodes",
   },
-  getParamNames: {
-    service: "/rosapi/get_param_names",
-    serviceType: "rosapi_msgs/srv/GetParamNames",
-  },
   getParam: {
     service: "/rosapi/get_param",
     serviceType: "rosapi_msgs/srv/GetParam",
@@ -126,7 +122,6 @@ const ROSAPI_SERVICES = {
 } as const satisfies Readonly<Record<string, RosbridgeServiceOptions>>;
 
 const ROS2_LIST_PARAMETERS_SERVICE_TYPE = "rcl_interfaces/srv/ListParameters";
-const ROSAPI_PARAMETER_NAMES_PROBE_TIMEOUT_MS = 2_000;
 const ROS2_PARAMETER_LIST_TIMEOUT_MS = 5_000;
 
 const DEFAULT_RECONNECT: RosbridgeReconnectPolicy = {
@@ -1016,7 +1011,6 @@ export function createRosbridgeTransportPlugin(options: RosbridgeTransportPlugin
       }
 
       const nodesClient = connection.acquireServiceClient(ROSAPI_SERVICES.nodes);
-      const namesClient = connection.acquireServiceClient(ROSAPI_SERVICES.getParamNames);
       const getClient = connection.acquireServiceClient(ROSAPI_SERVICES.getParam);
       const setClient = connection.acquireServiceClient(ROSAPI_SERVICES.setParam);
       const parameters = new Map<ResourceId, {
@@ -1058,7 +1052,11 @@ export function createRosbridgeTransportPlugin(options: RosbridgeTransportPlugin
 
       const nativeListParameters = async (
         nodes: readonly string[],
-      ): Promise<{ readonly ids: readonly ResourceId[]; readonly successfulNodes: number }> => {
+      ): Promise<{
+        readonly ids: readonly ResourceId[];
+        readonly attemptedNodes: number;
+        readonly successfulNodes: number;
+      }> => {
         const fallbackTimeoutMs = Math.min(
           definition.prepared.timeoutMs,
           ROS2_PARAMETER_LIST_TIMEOUT_MS,
@@ -1113,28 +1111,24 @@ export function createRosbridgeTransportPlugin(options: RosbridgeTransportPlugin
           successfulNodes += 1;
           for (const id of result.value) discovered.add(id);
         }
-        return { ids: [...discovered].sort(), successfulNodes };
+        return {
+          ids: [...discovered].sort(),
+          attemptedNodes: fallbackNodes.length,
+          successfulNodes,
+        };
       };
 
       const discover = async (): Promise<readonly ParameterDescriptor<unknown>[]> => {
         ensureActive();
-        const namesResult = callRosapi(
-          namesClient,
-          {},
-          context.clock,
-          callOptions(
-            "discovery",
-            ROSAPI_SERVICES.getParamNames.service,
-            undefined,
-            Math.min(
-              definition.prepared.timeoutMs,
-              ROSAPI_PARAMETER_NAMES_PROBE_TIMEOUT_MS,
-            ),
-          ),
-        ).then(
-          (response) => ({ ok: true as const, response }),
-          (error) => ({ ok: false as const, error }),
-        );
+
+        // Humble rosapi's global get_param_names callback can spend multiple seconds
+        // synchronously walking every node's parameter services. A GGCS-side timeout
+        // cannot cancel an already-dispatched ordinary ROS service call, so probing
+        // get_param_names in parallel can starve otherwise healthy rosapi calls such
+        // as /rosapi/nodes and subsequent get/set operations. Discover the node set
+        // first, then query each node through ROS 2's standard ListParameters service.
+        // rosapi remains the transport boundary for node discovery and get/set; the
+        // transport-specific Humble workaround stays hidden behind ParameterProvider.
         const nodesResponse = await callRosapi(
           nodesClient,
           {},
@@ -1153,39 +1147,15 @@ export function createRosbridgeTransportPlugin(options: RosbridgeTransportPlugin
         }
 
         const nodes = [...new Set(nodesValue as string[])];
-        let rosapiNamesError: unknown;
-        let discovered: readonly ResourceId[] = [];
-        const completedNames = await namesResult;
-        if (completedNames.ok) {
-          const namesValue = completedNames.response.names;
-          if (!Array.isArray(namesValue) || !namesValue.every((value) => typeof value === "string")) {
-            rosapiNamesError = rosapiFailure(
-              callOptions("discovery", ROSAPI_SERVICES.getParamNames.service),
-              new Error("rosapi get_param_names response.names must be string[]"),
-            );
-          } else {
-            const nodeSet = new Set(nodes);
-            discovered = (namesValue as string[])
-              .filter((value): value is ResourceId => isRosParameterAddress(value))
-              .filter((value) => nodeSet.has(parseRosParameterAddress(value).node))
-              .sort();
-          }
-        } else {
-          rosapiNamesError = completedNames.error;
+        const native = await nativeListParameters(nodes);
+        if (native.attemptedNodes > 0 && native.successfulNodes === 0) {
+          throw rosapiFailure(
+            callOptions("discovery", "*/list_parameters"),
+            new Error("No discovered ROS node responded to ListParameters"),
+          );
         }
 
-        // Humble rosapi has a known get_param_names failure/empty-result path while
-        // traversing node parameter services. Keep rosapi as the primary API, but
-        // recover discovery through each node's standard ROS 2 ListParameters service.
-        if (discovered.length === 0) {
-          const fallback = await nativeListParameters(nodes);
-          if (fallback.ids.length > 0 || fallback.successfulNodes > 0) {
-            discovered = fallback.ids;
-          } else if (rosapiNamesError !== undefined) {
-            throw rosapiNamesError;
-          }
-        }
-
+        const discovered = native.ids;
         known.clear();
         for (const id of discovered) known.add(id);
         return discovered.map((id) => descriptorFor(id));
@@ -1361,7 +1331,6 @@ export function createRosbridgeTransportPlugin(options: RosbridgeTransportPlugin
           parameters.clear();
           known.clear();
           nodesClient.release();
-          namesClient.release();
           getClient.release();
           setClient.release();
         },

@@ -176,17 +176,40 @@ function provider(runtime: Runtime, id = "fixture.parameters"): ParameterProvide
   return runtime.resource<ParameterProvider>(id);
 }
 
-function completeDiscovery(
+async function completeDiscovery(
   client: FakeRosbridgeClient,
   names: readonly string[] = [PARAMETER_ID],
-): void {
-  const nodes = [...new Set(names.map((id) => id.slice(0, id.indexOf(":"))))];
-  const nodesService = client.service("/rosapi/nodes", client.services.filter((s) => s.options.service === "/rosapi/nodes").length - 1);
-  const namesService = client.service("/rosapi/get_param_names", client.services.filter((s) => s.options.service === "/rosapi/get_param_names").length - 1);
-  const nodesCall = nodesService.calls.length - 1;
-  const namesCall = namesService.calls.length - 1;
-  nodesService.succeed(nodesCall, { nodes });
-  namesService.succeed(namesCall, { names: [...names] });
+): Promise<void> {
+  const byNode = new Map<string, string[]>();
+  for (const id of names) {
+    const separator = id.indexOf(":");
+    const node = id.slice(0, separator);
+    const name = id.slice(separator + 1);
+    let nodeNames = byNode.get(node);
+    if (!nodeNames) {
+      nodeNames = [];
+      byNode.set(node, nodeNames);
+    }
+    nodeNames.push(name);
+  }
+
+  const nodesService = client.service(
+    "/rosapi/nodes",
+    client.services.filter((service) => service.options.service === "/rosapi/nodes").length - 1,
+  );
+  nodesService.succeed(nodesService.calls.length - 1, { nodes: [...byNode.keys()] });
+  await Promise.resolve();
+  await Promise.resolve();
+
+  for (const [node, nodeNames] of byNode) {
+    const serviceName = `${node}/list_parameters`;
+    const matches = client.services.filter((service) => service.options.service === serviceName);
+    const service = matches[matches.length - 1];
+    if (!service) throw new Error(`Missing fake service ${serviceName}`);
+    service.succeed(service.calls.length - 1, {
+      result: { names: nodeNames, prefixes: [] },
+    });
+  }
 }
 
 async function discoverAndResolve(
@@ -194,7 +217,7 @@ async function discoverAndResolve(
   client: FakeRosbridgeClient,
 ): Promise<Parameter<string>> {
   const listPromise = provider(runtime).list();
-  completeDiscovery(client);
+  await completeDiscovery(client);
   await listPromise;
   return provider(runtime).resolve<string>(PARAMETER_ID);
 }
@@ -208,34 +231,37 @@ describe("ROSBridge ParameterProvider", () => {
     client.open();
 
     const allPromise = provider(runtime).list();
-    completeDiscovery(client, [PARAMETER_ID, "/other_node:other"]);
+    await completeDiscovery(client, [PARAMETER_ID, "/other_node:other"]);
     const all = await allPromise;
     expect(all).toHaveLength(2);
     expect(all[0]).toMatchObject({ type: { id: CORE_TYPE_IDS.string }, writable: true });
     expect(all[0]).not.toHaveProperty("defaultValue");
 
     const prefixPromise = provider(runtime).list({ prefix: "/ggcs_m02_topic_fixture:" });
-    completeDiscovery(client, [PARAMETER_ID, "/other_node:other"]);
+    await completeDiscovery(client, [PARAMETER_ID, "/other_node:other"]);
     await expect(prefixPromise).resolves.toHaveLength(1);
 
     const readOnlyPromise = provider(runtime).list({ writable: false });
-    completeDiscovery(client, [PARAMETER_ID]);
+    await completeDiscovery(client, [PARAMETER_ID]);
     await expect(readOnlyPromise).resolves.toEqual([]);
     await runtime.stop();
   });
 
-  it("falls back to native ROS 2 ListParameters when rosapi get_param_names is empty", async () => {
+  it("discovers node parameters without dispatching rosapi get_param_names", async () => {
     const factory = new FakeRosbridgeClientFactory();
     const runtime = compiled(factory).createRuntime({ clock: new FakeClock() });
     await runtime.start();
     const client = factory.clients[0]!;
     client.open();
 
+    expect(
+      client.services.some((service) => service.options.service === "/rosapi/get_param_names"),
+    ).toBe(false);
+
     const listPromise = provider(runtime).list({ prefix: "/ggcs_m02_topic_fixture:" });
     client.service("/rosapi/nodes").succeed(0, {
       nodes: ["/ggcs_m02_topic_fixture", "/rosapi", "/rosapi_params"],
     });
-    client.service("/rosapi/get_param_names").succeed(0, { names: [] });
     await Promise.resolve();
     await Promise.resolve();
 
@@ -260,7 +286,7 @@ describe("ROSBridge ParameterProvider", () => {
     await runtime.stop();
   });
 
-  it("uses native ListParameters when rosapi name discovery fails and ignores unrelated node failures", async () => {
+  it("ignores unrelated node ListParameters failures when another node succeeds", async () => {
     const factory = new FakeRosbridgeClientFactory();
     const runtime = compiled(factory).createRuntime({ clock: new FakeClock() });
     await runtime.start();
@@ -271,7 +297,6 @@ describe("ROSBridge ParameterProvider", () => {
     client.service("/rosapi/nodes").succeed(0, {
       nodes: ["/broken_node", "/ggcs_m02_topic_fixture"],
     });
-    client.service("/rosapi/get_param_names").fail(0, new Error("humble discovery failed"));
     await Promise.resolve();
     await Promise.resolve();
 
@@ -288,6 +313,28 @@ describe("ROSBridge ParameterProvider", () => {
     await runtime.stop();
   });
 
+  it("fails discovery when nodes exist but no ListParameters service responds", async () => {
+    const factory = new FakeRosbridgeClientFactory();
+    const runtime = compiled(factory).createRuntime({ clock: new FakeClock() });
+    await runtime.start();
+    const client = factory.clients[0]!;
+    client.open();
+
+    const listPromise = provider(runtime).list();
+    client.service("/rosapi/nodes").succeed(0, { nodes: ["/broken_node"] });
+    await Promise.resolve();
+    await Promise.resolve();
+    client.service("/broken_node/list_parameters").fail(
+      0,
+      new Error("parameter service unavailable"),
+    );
+
+    await expect(listPromise).rejects.toMatchObject({
+      code: "GGCS_ROSBRIDGE_PARAMETER_DISCOVERY_FAILURE",
+    });
+    await runtime.stop();
+  });
+
   it("accepts an empty native discovery result when at least one node parameter service responds", async () => {
     const factory = new FakeRosbridgeClientFactory();
     const runtime = compiled(factory).createRuntime({ clock: new FakeClock() });
@@ -297,7 +344,6 @@ describe("ROSBridge ParameterProvider", () => {
 
     const listPromise = provider(runtime).list();
     client.service("/rosapi/nodes").succeed(0, { nodes: ["/empty_node"] });
-    client.service("/rosapi/get_param_names").fail(0, new Error("humble discovery failed"));
     await Promise.resolve();
     await Promise.resolve();
     client.service("/empty_node/list_parameters").succeed(0, {
@@ -316,7 +362,7 @@ describe("ROSBridge ParameterProvider", () => {
     client.open();
 
     const direct = provider(runtime).resolve<string>(PARAMETER_ID);
-    completeDiscovery(client);
+    await completeDiscovery(client);
     const parameter = await direct;
     expect(parameter.id).toBe(PARAMETER_ID);
     expect(parameter.kind).toBe("parameter");
@@ -382,7 +428,6 @@ describe("ROSBridge ParameterProvider", () => {
 
     const failed = provider(runtime).list();
     client.service("/rosapi/nodes").fail(0, new Error("nodes failed"));
-    client.service("/rosapi/get_param_names").succeed(0, { names: [] });
     await expect(failed).rejects.toMatchObject({ code: "GGCS_ROSBRIDGE_PARAMETER_DISCOVERY_FAILURE" });
 
     const timed = provider(runtime).list();
@@ -473,7 +518,7 @@ describe("ROSBridge ParameterProvider", () => {
     await runtime.stop();
   });
 
-  it("shares the four rosapi physical service clients across equivalent providers and releases by lease owner", async () => {
+  it("shares the three persistent rosapi service clients across equivalent providers and releases by lease owner", async () => {
     const factory = new FakeRosbridgeClientFactory();
     const runtime = compiled(factory, [
       parameterProviderDefinition("params.a"),
@@ -482,7 +527,7 @@ describe("ROSBridge ParameterProvider", () => {
     await runtime.start();
     const client = factory.clients[0]!;
     client.open();
-    expect(client.services).toHaveLength(4);
+    expect(client.services).toHaveLength(3);
     await runtime.stop();
     expect(client.closeCalls).toBe(1);
   });
@@ -497,8 +542,8 @@ describe("ROSBridge ParameterProvider", () => {
     factory.clients[0]!.open();
     factory.clients[1]!.open();
     expect(factory.clients).toHaveLength(2);
-    expect(factory.clients[0]!.services).toHaveLength(4);
-    expect(factory.clients[1]!.services).toHaveLength(4);
+    expect(factory.clients[0]!.services).toHaveLength(3);
+    expect(factory.clients[1]!.services).toHaveLength(3);
     expect(factory.clients[0]!.services[0]).not.toBe(factory.clients[1]!.services[0]);
     await first.stop();
     await second.stop();
