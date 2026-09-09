@@ -6,7 +6,10 @@ import {
   type CommandDispatchReceipt,
   type Invocation,
   type LiveResource,
+  type Parameter,
+  type ParameterProvider,
   type Procedure,
+  type RuntimeClock,
   type SourceController,
   type StaleObservation,
   type Subscription,
@@ -16,13 +19,21 @@ import { definePlugin } from "@ggcs/plugin-sdk";
 import {
   isCanonicalRosMessageType,
   isCanonicalRosServiceType,
+  isRosParameterAddress,
+  parseRosParameterAddress,
   rosMessageTypeId,
   rosServiceTypeId,
   type RosMessage,
   type RosServiceRequest,
   type RosServiceResponse,
 } from "@ggcs/ros";
-import type { BaseResourceDefinition, ResourceId } from "@ggcs/schema";
+import {
+  CORE_TYPE_DESCRIPTORS,
+  type BaseResourceDefinition,
+  type ParameterDescriptor,
+  type ParameterQuery,
+  type ResourceId,
+} from "@ggcs/schema";
 import {
   defaultRosbridgeClientFactory,
   type RosbridgeClientFactory,
@@ -32,6 +43,7 @@ import {
 import {
   RosbridgeConnection,
   type RosbridgeReconnectPolicy,
+  type RosbridgeServiceClientLease,
 } from "./connection.js";
 
 export const ROSBRIDGE_PLUGIN_ID = "ggcs:transport-rosbridge" as const;
@@ -41,6 +53,7 @@ export const ROSBRIDGE_PROVIDER_IDS = {
   topicSource: "rosbridge:topic-source",
   topicCommand: "rosbridge:topic-command",
   serviceProcedure: "rosbridge:service-procedure",
+  parameterProvider: "rosbridge:parameter-provider",
 } as const;
 
 export interface PreparedRosbridgeConnection {
@@ -81,11 +94,36 @@ export interface PreparedRosbridgeServiceProcedure {
   readonly timeoutMs: number;
 }
 
+export interface PreparedRosbridgeParameterProvider {
+  readonly connection: ResourceId;
+  readonly timeoutMs: number;
+}
+
 export interface RosbridgeTransportPluginOptions {
   readonly clientFactory?: RosbridgeClientFactory;
 }
 
 const DEFAULT_SERVICE_TIMEOUT_MS = 10_000;
+const DEFAULT_PARAMETER_TIMEOUT_MS = 10_000;
+
+const ROSAPI_SERVICES = {
+  nodes: {
+    service: "/rosapi/nodes",
+    serviceType: "rosapi_msgs/srv/Nodes",
+  },
+  getParamNames: {
+    service: "/rosapi/get_param_names",
+    serviceType: "rosapi_msgs/srv/GetParamNames",
+  },
+  getParam: {
+    service: "/rosapi/get_param",
+    serviceType: "rosapi_msgs/srv/GetParam",
+  },
+  setParam: {
+    service: "/rosapi/set_param",
+    serviceType: "rosapi_msgs/srv/SetParam",
+  },
+} as const satisfies Readonly<Record<string, RosbridgeServiceOptions>>;
 
 const DEFAULT_RECONNECT: RosbridgeReconnectPolicy = {
   enabled: true,
@@ -133,6 +171,18 @@ function invalidServiceProcedure(
 ): never {
   throw new RuntimeError({
     code: "GGCS_ROSBRIDGE_SERVICE_PROCEDURE_CONFIG_INVALID",
+    category: "configuration",
+    message,
+    ...(details !== undefined ? { details } : {}),
+  });
+}
+
+function invalidParameterProvider(
+  message: string,
+  details?: Readonly<Record<string, unknown>>,
+): never {
+  throw new RuntimeError({
+    code: "GGCS_ROSBRIDGE_PARAMETER_PROVIDER_CONFIG_INVALID",
     category: "configuration",
     message,
     ...(details !== undefined ? { details } : {}),
@@ -423,6 +473,25 @@ function parseServiceProcedureDefinition(
   };
 }
 
+function parseParameterProviderDefinition(
+  definition: BaseResourceDefinition,
+  config: Readonly<Record<string, unknown>>,
+): PreparedRosbridgeParameterProvider {
+  if (typeof config.connection !== "string" || config.connection.length === 0) {
+    invalidParameterProvider(`Resource ${definition.id} requires a connection resource id`);
+  }
+  const timeoutMs = config.timeoutMs ?? DEFAULT_PARAMETER_TIMEOUT_MS;
+  if (typeof timeoutMs !== "number" || !Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    invalidParameterProvider(`Resource ${definition.id} timeoutMs must be a positive finite number`, {
+      timeoutMs,
+    });
+  }
+  return {
+    connection: config.connection,
+    timeoutMs,
+  };
+}
+
 function serviceOptions(
   prepared: PreparedRosbridgeServiceProcedure,
 ): RosbridgeServiceOptions {
@@ -431,6 +500,117 @@ function serviceOptions(
 
 function isRosRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+type RosapiOperation = "discovery" | "read" | "write";
+
+interface RosapiCallOptions {
+  readonly operation: RosapiOperation;
+  readonly resource: ResourceId;
+  readonly connection: ResourceId;
+  readonly service: string;
+  readonly timeoutMs: number;
+  readonly parameter?: ResourceId;
+}
+
+function rosapiFailure(
+  options: RosapiCallOptions,
+  cause: unknown,
+): RuntimeError {
+  const code =
+    options.operation === "discovery"
+      ? "GGCS_ROSBRIDGE_PARAMETER_DISCOVERY_FAILURE"
+      : options.operation === "read"
+        ? "GGCS_ROSBRIDGE_PARAMETER_READ_FAILURE"
+        : "GGCS_ROSBRIDGE_PARAMETER_WRITE_FAILURE";
+  return new RuntimeError({
+    code,
+    category: options.operation === "write" ? "parameter_write" : "resource_unavailable",
+    message: `ROSBridge rosapi parameter ${options.operation} failed via ${options.service}`,
+    details: {
+      resource: options.resource,
+      connection: options.connection,
+      service: options.service,
+      ...(options.parameter !== undefined ? { parameter: options.parameter } : {}),
+    },
+    cause,
+  });
+}
+
+function rosapiTimeout(options: RosapiCallOptions): RuntimeError {
+  const code =
+    options.operation === "discovery"
+      ? "GGCS_ROSBRIDGE_PARAMETER_DISCOVERY_TIMEOUT"
+      : options.operation === "read"
+        ? "GGCS_ROSBRIDGE_PARAMETER_READ_TIMEOUT"
+        : "GGCS_ROSBRIDGE_PARAMETER_WRITE_TIMEOUT";
+  return new RuntimeError({
+    code,
+    category:
+      options.operation === "discovery"
+        ? "resource_unavailable"
+        : "invocation_timeout",
+    message: `ROSBridge rosapi parameter ${options.operation} timed out after ${options.timeoutMs}ms`,
+    details: {
+      resource: options.resource,
+      connection: options.connection,
+      service: options.service,
+      timeoutMs: options.timeoutMs,
+      ...(options.parameter !== undefined ? { parameter: options.parameter } : {}),
+    },
+  });
+}
+
+function callRosapi(
+  client: RosbridgeServiceClientLease,
+  request: Readonly<Record<string, unknown>>,
+  clock: RuntimeClock,
+  options: RosapiCallOptions,
+): Promise<Readonly<Record<string, unknown>>> {
+  return new Promise((resolve, reject) => {
+    let terminal = false;
+    let callSubscription: Subscription | undefined;
+    const timeoutTask = clock.schedule(options.timeoutMs, () => {
+      if (terminal) return;
+      terminal = true;
+      callSubscription?.unsubscribe();
+      reject(rosapiTimeout(options));
+    });
+
+    const finish = (
+      callback: () => void,
+    ): void => {
+      if (terminal) return;
+      terminal = true;
+      timeoutTask.cancel();
+      callSubscription?.unsubscribe();
+      callback();
+    };
+
+    try {
+      callSubscription = client.call(
+        request,
+        (response) => {
+          finish(() => {
+            if (!isRosRecord(response)) {
+              reject(
+                rosapiFailure(
+                  options,
+                  new Error(`rosapi service ${options.service} returned a non-object response`),
+                ),
+              );
+              return;
+            }
+            resolve(response);
+          });
+        },
+        (error) => finish(() => reject(rosapiFailure(options, error))),
+      );
+      if (terminal) callSubscription.unsubscribe();
+    } catch (error) {
+      finish(() => reject(rosapiFailure(options, error)));
+    }
+  });
 }
 
 function markConnectionLoss(controller: SourceController<RosMessage>, now: number): void {
@@ -799,6 +979,297 @@ export function createRosbridgeTransportPlugin(options: RosbridgeTransportPlugin
     },
   };
 
+  const parameterProvider: ResourceProvider<PreparedRosbridgeParameterProvider> = {
+    id: ROSBRIDGE_PROVIDER_IDS.parameterProvider,
+    prepare(definition, context) {
+      const config = context.assertObjectConfig(definition, {
+        allowed: ["connection", "timeoutMs"],
+        required: ["connection"],
+      });
+      const prepared = parseParameterProviderDefinition(definition, config);
+      context.resourceType(prepared.connection);
+      context.resolveType(definition.type);
+      return {
+        id: definition.id,
+        provider: ROSBRIDGE_PROVIDER_IDS.parameterProvider,
+        type: definition.type,
+        dependencies: [prepared.connection],
+        prepared,
+      };
+    },
+    create(definition, context): LiveResource {
+      const connection = context.getResource(definition.prepared.connection);
+      if (!(connection instanceof RosbridgeConnection)) {
+        throw new RuntimeError({
+          code: "GGCS_ROSBRIDGE_PARAMETER_CONNECTION_INVALID",
+          category: "provider_create",
+          message: `Resource ${definition.id} requires a ROSBridge Connection`,
+          details: {
+            resource: definition.id,
+            connection: definition.prepared.connection,
+          },
+        });
+      }
+
+      const nodesClient = connection.acquireServiceClient(ROSAPI_SERVICES.nodes);
+      const namesClient = connection.acquireServiceClient(ROSAPI_SERVICES.getParamNames);
+      const getClient = connection.acquireServiceClient(ROSAPI_SERVICES.getParam);
+      const setClient = connection.acquireServiceClient(ROSAPI_SERVICES.setParam);
+      const parameters = new Map<ResourceId, {
+        readonly parameter: Parameter<string>;
+        readonly controller: SourceController<string>;
+      }>();
+      const known = new Set<ResourceId>();
+      let disposed = false;
+
+      const descriptorFor = (id: ResourceId): ParameterDescriptor<string> => ({
+        id,
+        type: CORE_TYPE_DESCRIPTORS.string,
+        writable: true,
+      });
+
+      const callOptions = (
+        operation: RosapiOperation,
+        service: string,
+        parameter?: ResourceId,
+      ): RosapiCallOptions => ({
+        operation,
+        resource: definition.id,
+        connection: definition.prepared.connection,
+        service,
+        timeoutMs: definition.prepared.timeoutMs,
+        ...(parameter !== undefined ? { parameter } : {}),
+      });
+
+      const ensureActive = (): void => {
+        if (!disposed) return;
+        throw new RuntimeError({
+          code: "GGCS_ROSBRIDGE_PARAMETER_PROVIDER_DISPOSED",
+          category: "resource_unavailable",
+          message: `ROSBridge ParameterProvider ${definition.id} is disposed`,
+          details: { resource: definition.id },
+        });
+      };
+
+      const discover = async (): Promise<readonly ParameterDescriptor<unknown>[]> => {
+        ensureActive();
+        const [nodesResponse, namesResponse] = await Promise.all([
+          callRosapi(
+            nodesClient,
+            {},
+            context.clock,
+            callOptions("discovery", ROSAPI_SERVICES.nodes.service),
+          ),
+          callRosapi(
+            namesClient,
+            {},
+            context.clock,
+            callOptions("discovery", ROSAPI_SERVICES.getParamNames.service),
+          ),
+        ]);
+
+        const nodesValue = nodesResponse.nodes;
+        const namesValue = namesResponse.names;
+        if (
+          !Array.isArray(nodesValue) ||
+          !nodesValue.every((value) => typeof value === "string") ||
+          !Array.isArray(namesValue) ||
+          !namesValue.every((value) => typeof value === "string")
+        ) {
+          throw rosapiFailure(
+            callOptions("discovery", ROSAPI_SERVICES.getParamNames.service),
+            new Error("rosapi discovery response has invalid nodes/names shape"),
+          );
+        }
+
+        const nodes = new Set(nodesValue as string[]);
+        const discovered = (namesValue as string[])
+          .filter((value) => isRosParameterAddress(value))
+          .filter((value) => nodes.has(parseRosParameterAddress(value).node))
+          .sort();
+        known.clear();
+        for (const id of discovered) known.add(id);
+        return discovered.map((id) => descriptorFor(id));
+      };
+
+      const getOrCreateParameter = (id: ResourceId): Parameter<string> => {
+        const existing = parameters.get(id);
+        if (existing) return existing.parameter;
+
+        const controller = createSourceController<string>({
+          id: `${definition.id}:${id}:value`,
+          clock: context.clock,
+        });
+        const descriptor = descriptorFor(id);
+        const parameter: Parameter<string> = {
+          id,
+          kind: "parameter",
+          descriptor,
+          value: controller.source,
+          refresh(): Invocation<string> {
+            const invocationController = createInvocationController<string>({
+              clock: context.clock,
+              failureCode: "GGCS_ROSBRIDGE_PARAMETER_READ_FAILURE",
+            });
+            if (disposed) {
+              invocationController.fail(
+                new RuntimeError({
+                  code: "GGCS_ROSBRIDGE_PARAMETER_PROVIDER_DISPOSED",
+                  category: "resource_unavailable",
+                  message: `ROSBridge ParameterProvider ${definition.id} is disposed`,
+                  details: { resource: definition.id, parameter: id },
+                }),
+              );
+              return invocationController.invocation;
+            }
+
+            void callRosapi(
+              getClient,
+              { name: id, default_value: "" },
+              context.clock,
+              callOptions("read", ROSAPI_SERVICES.getParam.service, id),
+            ).then(
+              (response) => {
+                if (typeof response.value !== "string") {
+                  const error = rosapiFailure(
+                    callOptions("read", ROSAPI_SERVICES.getParam.service, id),
+                    new Error("rosapi get_param response.value must be a string"),
+                  );
+                  controller.fail(error, true);
+                  invocationController.fail(error);
+                  return;
+                }
+                controller.publish(response.value, {
+                  provenance: { resourceIds: [definition.id, id] },
+                });
+                invocationController.succeed(response.value);
+              },
+              (error) => {
+                const runtimeError =
+                  error instanceof RuntimeError
+                    ? error
+                    : rosapiFailure(
+                        callOptions("read", ROSAPI_SERVICES.getParam.service, id),
+                        error,
+                      );
+                controller.fail(runtimeError, true);
+                if (runtimeError.category === "invocation_timeout") {
+                  invocationController.timeout(runtimeError);
+                } else {
+                  invocationController.fail(runtimeError);
+                }
+              },
+            );
+            return invocationController.invocation;
+          },
+          write(value: string): Invocation<void> {
+            const invocationController = createInvocationController<void>({
+              clock: context.clock,
+              failureCode: "GGCS_ROSBRIDGE_PARAMETER_WRITE_FAILURE",
+            });
+            if (disposed) {
+              invocationController.fail(
+                new RuntimeError({
+                  code: "GGCS_ROSBRIDGE_PARAMETER_PROVIDER_DISPOSED",
+                  category: "parameter_write",
+                  message: `ROSBridge ParameterProvider ${definition.id} is disposed`,
+                  details: { resource: definition.id, parameter: id },
+                }),
+              );
+              return invocationController.invocation;
+            }
+            if (typeof value !== "string") {
+              invocationController.fail(
+                new RuntimeError({
+                  code: "GGCS_ROSBRIDGE_PARAMETER_VALUE_INVALID",
+                  category: "parameter_validation",
+                  message: `ROSBridge parameter ${id} requires a string value`,
+                  details: { resource: definition.id, parameter: id, value },
+                }),
+              );
+              return invocationController.invocation;
+            }
+
+            void callRosapi(
+              setClient,
+              { name: id, value },
+              context.clock,
+              callOptions("write", ROSAPI_SERVICES.setParam.service, id),
+            ).then(
+              () => invocationController.succeed(undefined),
+              (error) => {
+                const runtimeError =
+                  error instanceof RuntimeError
+                    ? error
+                    : rosapiFailure(
+                        callOptions("write", ROSAPI_SERVICES.setParam.service, id),
+                        error,
+                      );
+                if (runtimeError.category === "invocation_timeout") {
+                  invocationController.timeout(runtimeError);
+                } else {
+                  invocationController.fail(runtimeError);
+                }
+              },
+            );
+            return invocationController.invocation;
+          },
+        };
+        parameters.set(id, { parameter, controller });
+        return parameter;
+      };
+
+      const provider: ParameterProvider = {
+        id: definition.id,
+        kind: "parameter_provider",
+        async list(query?: ParameterQuery): Promise<readonly ParameterDescriptor<unknown>[]> {
+          const descriptors = await discover();
+          return descriptors.filter(
+            (descriptor) =>
+              (query?.prefix === undefined || descriptor.id.startsWith(query.prefix)) &&
+              (query?.writable === undefined || descriptor.writable === query.writable),
+          );
+        },
+        async resolve<T = unknown>(id: ResourceId): Promise<Parameter<T>> {
+          ensureActive();
+          if (!isRosParameterAddress(id)) {
+            throw new RuntimeError({
+              code: "GGCS_ROSBRIDGE_PARAMETER_ID_INVALID",
+              category: "parameter_validation",
+              message: `ROSBridge parameter id must use <absolute-node>:<parameter-name>: ${id}`,
+              details: { resource: definition.id, parameter: id },
+            });
+          }
+          if (!known.has(id)) await discover();
+          if (!known.has(id)) {
+            throw new RuntimeError({
+              code: "GGCS_ROSBRIDGE_PARAMETER_UNKNOWN",
+              category: "resource_unavailable",
+              message: `ROSBridge parameter ${id} was not discovered by rosapi`,
+              details: { resource: definition.id, parameter: id },
+            });
+          }
+          return getOrCreateParameter(id) as Parameter<T>;
+        },
+      };
+
+      return {
+        resource: provider,
+        dispose(): void {
+          if (disposed) return;
+          disposed = true;
+          for (const entry of parameters.values()) entry.controller.dispose();
+          parameters.clear();
+          known.clear();
+          nodesClient.release();
+          namesClient.release();
+          getClient.release();
+          setClient.release();
+        },
+      };
+    },
+  };
+
   return definePlugin({
     manifest: {
       id: ROSBRIDGE_PLUGIN_ID,
@@ -810,6 +1281,7 @@ export function createRosbridgeTransportPlugin(options: RosbridgeTransportPlugin
       topicSourceProvider,
       topicCommandProvider,
       serviceProcedureProvider,
+      parameterProvider,
     ],
   });
 }

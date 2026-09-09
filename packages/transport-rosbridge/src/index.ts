@@ -20,6 +20,7 @@ export {
   ROSBRIDGE_PROVIDER_IDS,
   createRosbridgeTransportPlugin,
   type PreparedRosbridgeConnection,
+  type PreparedRosbridgeParameterProvider,
   type PreparedRosbridgeServiceProcedure,
   type PreparedRosbridgeTopicCommand,
   type PreparedRosbridgeTopicSource,

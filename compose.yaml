@@ -206,3 +206,23 @@ services:
       m02-ros-fixture:
         condition: service_started
     command: ["pnpm", "run", "example:m02:service"]
+
+  m02-parameter-provider-smoke:
+    profiles: ["m02"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: m02-example
+      args:
+        <<: *registry-build-args
+        NODE_VERSION: ${GGCS_NODE_VERSION:-22.23.2}
+        PNPM_VERSION: ${GGCS_PNPM_VERSION:-10.34.5}
+    environment:
+      GGCS_ROSBRIDGE_URL: ws://m02-rosbridge:9090
+      GGCS_ROSBRIDGE_PARAMETER_SMOKE_TIMEOUT_MS: ${GGCS_ROSBRIDGE_PARAMETER_SMOKE_TIMEOUT_MS:-15000}
+    depends_on:
+      m02-rosbridge:
+        condition: service_started
+      m02-ros-fixture:
+        condition: service_started
+    command: ["pnpm", "run", "example:m02:parameter"]

@@ -7,6 +7,12 @@ export type RosMessage = Readonly<Record<string, unknown>>;
 export type RosServiceRequest = Readonly<Record<string, unknown>>;
 export type RosServiceResponse = Readonly<Record<string, unknown>>;
 
+export interface RosParameterAddress {
+  readonly id: string;
+  readonly node: string;
+  readonly name: string;
+}
+
 /**
  * GGCS portable ROS message definitions use the full ROS 2 interface form
  * package/msg/Type. rosbridge also accepts shorter aliases, but keeping one
@@ -44,6 +50,41 @@ export function rosServiceTypeId(serviceType: string): TypeId {
     );
   }
   return `ros:service/${serviceType}`;
+}
+
+/**
+ * rosapi represents ROS 2 parameters as `<absolute-node>:<parameter-name>`.
+ * Keep that wire/domain identity outside the ROSBridge transport package so a
+ * future native ROS 2 provider can reuse the same semantic address format.
+ */
+export function parseRosParameterAddress(value: string): RosParameterAddress {
+  const separator = value.indexOf(":");
+  const node = separator >= 0 ? value.slice(0, separator) : "";
+  const name = separator >= 0 ? value.slice(separator + 1) : "";
+  if (
+    separator <= 0 ||
+    value.indexOf(":", separator + 1) !== -1 ||
+    !node.startsWith("/") ||
+    node.length < 2 ||
+    /\s/.test(node) ||
+    name.length === 0 ||
+    /[:\s]/.test(name)
+  ) {
+    throw new Error(
+      `ROS parameter id must use <absolute-node>:<parameter-name> form: ${value}`,
+    );
+  }
+  return { id: value, node, name };
+}
+
+export function isRosParameterAddress(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  try {
+    parseRosParameterAddress(value);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function defineRosMessageType(

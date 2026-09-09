@@ -11,6 +11,7 @@
     { "path": "./apps/examples/rosbridge-headless" },
     { "path": "./apps/examples/rosbridge-topic-headless" },
     { "path": "./apps/examples/rosbridge-command-headless" },
-    { "path": "./apps/examples/rosbridge-service-headless" }
+    { "path": "./apps/examples/rosbridge-service-headless" },
+    { "path": "./apps/examples/rosbridge-parameter-headless" }
   ]
 }

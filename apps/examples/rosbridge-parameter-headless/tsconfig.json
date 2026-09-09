@@ -1,0 +1,16 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "tsBuildInfoFile": "./tsconfig.tsbuildinfo"
+  },
+  "references": [
+    { "path": "../../../packages/schema" },
+    { "path": "../../../packages/core" },
+    { "path": "../../../packages/plugin-sdk" },
+    { "path": "../../../packages/ros" },
+    { "path": "../../../packages/transport-rosbridge" }
+  ],
+  "include": ["src/**/*.ts"]
+}

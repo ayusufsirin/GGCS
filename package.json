@@ -54,7 +54,9 @@
     "example:m02:command": "node apps/examples/rosbridge-command-headless/dist/index.js",
     "docker:m02:command-smoke": "docker compose --profile m02 up --build --abort-on-container-exit --exit-code-from m02-topic-command-smoke m02-topic-command-smoke",
     "example:m02:service": "node apps/examples/rosbridge-service-headless/dist/index.js",
-    "docker:m02:service-smoke": "docker compose --profile m02 up --build --abort-on-container-exit --exit-code-from m02-service-procedure-smoke m02-service-procedure-smoke"
+    "docker:m02:service-smoke": "docker compose --profile m02 up --build --abort-on-container-exit --exit-code-from m02-service-procedure-smoke m02-service-procedure-smoke",
+    "example:m02:parameter": "node apps/examples/rosbridge-parameter-headless/dist/index.js",
+    "docker:m02:parameter-smoke": "docker compose --profile m02 up --build --abort-on-container-exit --exit-code-from m02-parameter-provider-smoke m02-parameter-provider-smoke"
   },
   "eslintConfig": {
     "extends": [

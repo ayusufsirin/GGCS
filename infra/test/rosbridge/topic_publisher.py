@@ -10,6 +10,7 @@ from std_srvs.srv import Trigger
 class TopicFixture(Node):
     def __init__(self) -> None:
         super().__init__("ggcs_m02_topic_fixture")
+        self.declare_parameter("ggcs_test_parameter", 12.5)
         self.publisher = self.create_publisher(Float64, "/ggcs_test/temperature", 10)
         self.command_ready_publisher = self.create_publisher(
             Float64, "/ggcs_test/command_ready", 10
@@ -34,6 +35,9 @@ class TopicFixture(Node):
         )
         self.get_logger().info(
             "M02 fixture serving std_srvs/srv/Trigger on /ggcs_test/trigger and /ggcs_test/slow_trigger"
+        )
+        self.get_logger().info(
+            "M02 fixture declaring parameter ggcs_test_parameter=12.5"
         )
         self.value = 31.5
         self.timer = self.create_timer(0.2, self.publish_sample)
