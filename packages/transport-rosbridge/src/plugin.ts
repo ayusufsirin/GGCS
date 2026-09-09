@@ -125,6 +125,10 @@ const ROSAPI_SERVICES = {
   },
 } as const satisfies Readonly<Record<string, RosbridgeServiceOptions>>;
 
+const ROS2_LIST_PARAMETERS_SERVICE_TYPE = "rcl_interfaces/srv/ListParameters";
+const ROSAPI_PARAMETER_NAMES_PROBE_TIMEOUT_MS = 2_000;
+const ROS2_PARAMETER_LIST_TIMEOUT_MS = 5_000;
+
 const DEFAULT_RECONNECT: RosbridgeReconnectPolicy = {
   enabled: true,
   initialDelayMs: 500,
@@ -1032,12 +1036,13 @@ export function createRosbridgeTransportPlugin(options: RosbridgeTransportPlugin
         operation: RosapiOperation,
         service: string,
         parameter?: ResourceId,
+        timeoutMs = definition.prepared.timeoutMs,
       ): RosapiCallOptions => ({
         operation,
         resource: definition.id,
         connection: definition.prepared.connection,
         service,
-        timeoutMs: definition.prepared.timeoutMs,
+        timeoutMs,
         ...(parameter !== undefined ? { parameter } : {}),
       });
 
@@ -1051,42 +1056,136 @@ export function createRosbridgeTransportPlugin(options: RosbridgeTransportPlugin
         });
       };
 
+      const nativeListParameters = async (
+        nodes: readonly string[],
+      ): Promise<{ readonly ids: readonly ResourceId[]; readonly successfulNodes: number }> => {
+        const fallbackTimeoutMs = Math.min(
+          definition.prepared.timeoutMs,
+          ROS2_PARAMETER_LIST_TIMEOUT_MS,
+        );
+        const fallbackNodes = nodes.filter(
+          (node) =>
+            /^\/[^\s]*$/.test(node) &&
+            node !== "/rosapi" &&
+            node !== "/rosapi_params",
+        );
+        const perNode = await Promise.allSettled(
+          fallbackNodes.map(async (node): Promise<readonly ResourceId[]> => {
+            const service = `${node.replace(/\/$/, "")}/list_parameters`;
+            const lease = connection.acquireServiceClient({
+              service,
+              serviceType: ROS2_LIST_PARAMETERS_SERVICE_TYPE,
+            });
+            try {
+              const response = await callRosapi(
+                lease,
+                { prefixes: [], depth: 0 },
+                context.clock,
+                callOptions("discovery", service, undefined, fallbackTimeoutMs),
+              );
+              const result = response.result;
+              if (!isRosRecord(result)) {
+                throw rosapiFailure(
+                  callOptions("discovery", service, undefined, fallbackTimeoutMs),
+                  new Error("ROS 2 list_parameters response.result must be an object"),
+                );
+              }
+              const names = result.names;
+              if (!Array.isArray(names) || !names.every((value) => typeof value === "string")) {
+                throw rosapiFailure(
+                  callOptions("discovery", service, undefined, fallbackTimeoutMs),
+                  new Error("ROS 2 list_parameters response.result.names must be string[]"),
+                );
+              }
+              return (names as string[])
+                .map((name) => `${node}:${name}`)
+                .filter((id): id is ResourceId => isRosParameterAddress(id));
+            } finally {
+              lease.release();
+            }
+          }),
+        );
+
+        const discovered = new Set<ResourceId>();
+        let successfulNodes = 0;
+        for (const result of perNode) {
+          if (result.status !== "fulfilled") continue;
+          successfulNodes += 1;
+          for (const id of result.value) discovered.add(id);
+        }
+        return { ids: [...discovered].sort(), successfulNodes };
+      };
+
       const discover = async (): Promise<readonly ParameterDescriptor<unknown>[]> => {
         ensureActive();
-        const [nodesResponse, namesResponse] = await Promise.all([
-          callRosapi(
-            nodesClient,
-            {},
-            context.clock,
-            callOptions("discovery", ROSAPI_SERVICES.nodes.service),
+        const namesResult = callRosapi(
+          namesClient,
+          {},
+          context.clock,
+          callOptions(
+            "discovery",
+            ROSAPI_SERVICES.getParamNames.service,
+            undefined,
+            Math.min(
+              definition.prepared.timeoutMs,
+              ROSAPI_PARAMETER_NAMES_PROBE_TIMEOUT_MS,
+            ),
           ),
-          callRosapi(
-            namesClient,
-            {},
-            context.clock,
-            callOptions("discovery", ROSAPI_SERVICES.getParamNames.service),
-          ),
-        ]);
-
+        ).then(
+          (response) => ({ ok: true as const, response }),
+          (error) => ({ ok: false as const, error }),
+        );
+        const nodesResponse = await callRosapi(
+          nodesClient,
+          {},
+          context.clock,
+          callOptions("discovery", ROSAPI_SERVICES.nodes.service),
+        );
         const nodesValue = nodesResponse.nodes;
-        const namesValue = namesResponse.names;
         if (
           !Array.isArray(nodesValue) ||
-          !nodesValue.every((value) => typeof value === "string") ||
-          !Array.isArray(namesValue) ||
-          !namesValue.every((value) => typeof value === "string")
+          !nodesValue.every((value) => typeof value === "string")
         ) {
           throw rosapiFailure(
-            callOptions("discovery", ROSAPI_SERVICES.getParamNames.service),
-            new Error("rosapi discovery response has invalid nodes/names shape"),
+            callOptions("discovery", ROSAPI_SERVICES.nodes.service),
+            new Error("rosapi nodes response.nodes must be string[]"),
           );
         }
 
-        const nodes = new Set(nodesValue as string[]);
-        const discovered = (namesValue as string[])
-          .filter((value) => isRosParameterAddress(value))
-          .filter((value) => nodes.has(parseRosParameterAddress(value).node))
-          .sort();
+        const nodes = [...new Set(nodesValue as string[])];
+        let rosapiNamesError: unknown;
+        let discovered: readonly ResourceId[] = [];
+        const completedNames = await namesResult;
+        if (completedNames.ok) {
+          const namesValue = completedNames.response.names;
+          if (!Array.isArray(namesValue) || !namesValue.every((value) => typeof value === "string")) {
+            rosapiNamesError = rosapiFailure(
+              callOptions("discovery", ROSAPI_SERVICES.getParamNames.service),
+              new Error("rosapi get_param_names response.names must be string[]"),
+            );
+          } else {
+            const nodeSet = new Set(nodes);
+            discovered = (namesValue as string[])
+              .filter((value): value is ResourceId => isRosParameterAddress(value))
+              .filter((value) => nodeSet.has(parseRosParameterAddress(value).node))
+              .sort();
+          }
+        } else {
+          rosapiNamesError = completedNames.error;
+        }
+
+        // Humble rosapi has a known get_param_names failure/empty-result path while
+        // traversing node parameter services. Keep rosapi as the primary API, but
+        // recover discovery through each node's standard ROS 2 ListParameters service.
+        if (discovered.length === 0) {
+          const fallback = await nativeListParameters(nodes);
+          if (fallback.ids.length > 0 || fallback.successfulNodes > 0) {
+            discovered = fallback.ids;
+          } else if (rosapiNamesError !== undefined) {
+            throw rosapiNamesError;
+          }
+        }
+
         known.clear();
         for (const id of discovered) known.add(id);
         return discovered.map((id) => descriptorFor(id));

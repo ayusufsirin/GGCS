@@ -224,6 +224,90 @@ describe("ROSBridge ParameterProvider", () => {
     await runtime.stop();
   });
 
+  it("falls back to native ROS 2 ListParameters when rosapi get_param_names is empty", async () => {
+    const factory = new FakeRosbridgeClientFactory();
+    const runtime = compiled(factory).createRuntime({ clock: new FakeClock() });
+    await runtime.start();
+    const client = factory.clients[0]!;
+    client.open();
+
+    const listPromise = provider(runtime).list({ prefix: "/ggcs_m02_topic_fixture:" });
+    client.service("/rosapi/nodes").succeed(0, {
+      nodes: ["/ggcs_m02_topic_fixture", "/rosapi", "/rosapi_params"],
+    });
+    client.service("/rosapi/get_param_names").succeed(0, { names: [] });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const native = client.service("/ggcs_m02_topic_fixture/list_parameters");
+    expect(native.options.serviceType).toBe("rcl_interfaces/srv/ListParameters");
+    expect(native.calls[0]?.request).toEqual({ prefixes: [], depth: 0 });
+    native.succeed(0, {
+      result: { names: ["ggcs_test_parameter"], prefixes: [] },
+    });
+
+    await expect(listPromise).resolves.toEqual([
+      expect.objectContaining({ id: PARAMETER_ID, writable: true }),
+    ]);
+    expect(
+      client.services.some((service) => service.options.service === "/rosapi/list_parameters"),
+    ).toBe(false);
+    expect(
+      client.services.some(
+        (service) => service.options.service === "/rosapi_params/list_parameters",
+      ),
+    ).toBe(false);
+    await runtime.stop();
+  });
+
+  it("uses native ListParameters when rosapi name discovery fails and ignores unrelated node failures", async () => {
+    const factory = new FakeRosbridgeClientFactory();
+    const runtime = compiled(factory).createRuntime({ clock: new FakeClock() });
+    await runtime.start();
+    const client = factory.clients[0]!;
+    client.open();
+
+    const listPromise = provider(runtime).list();
+    client.service("/rosapi/nodes").succeed(0, {
+      nodes: ["/broken_node", "/ggcs_m02_topic_fixture"],
+    });
+    client.service("/rosapi/get_param_names").fail(0, new Error("humble discovery failed"));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const broken = client.service("/broken_node/list_parameters");
+    const fixture = client.service("/ggcs_m02_topic_fixture/list_parameters");
+    broken.fail(0, new Error("parameter service unavailable"));
+    fixture.succeed(0, {
+      result: { names: ["ggcs_test_parameter"], prefixes: [] },
+    });
+
+    await expect(listPromise).resolves.toEqual([
+      expect.objectContaining({ id: PARAMETER_ID, writable: true }),
+    ]);
+    await runtime.stop();
+  });
+
+  it("accepts an empty native discovery result when at least one node parameter service responds", async () => {
+    const factory = new FakeRosbridgeClientFactory();
+    const runtime = compiled(factory).createRuntime({ clock: new FakeClock() });
+    await runtime.start();
+    const client = factory.clients[0]!;
+    client.open();
+
+    const listPromise = provider(runtime).list();
+    client.service("/rosapi/nodes").succeed(0, { nodes: ["/empty_node"] });
+    client.service("/rosapi/get_param_names").fail(0, new Error("humble discovery failed"));
+    await Promise.resolve();
+    await Promise.resolve();
+    client.service("/empty_node/list_parameters").succeed(0, {
+      result: { names: [], prefixes: [] },
+    });
+
+    await expect(listPromise).resolves.toEqual([]);
+    await runtime.stop();
+  });
+
   it("resolves discovered parameters with stable identity and initial unavailable value", async () => {
     const factory = new FakeRosbridgeClientFactory();
     const runtime = compiled(factory).createRuntime({ clock: new FakeClock() });
