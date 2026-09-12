@@ -13,12 +13,13 @@ ARG NEXUS_APT_UBUNTU_PORTS_URL=""
 ARG NEXUS_APT_ROS2_URL=""
 
 COPY docker/nexus/configure-registries.sh /usr/local/bin/ggcs-configure-registries
-RUN ggcs-configure-registries \
+RUN --mount=type=cache,id=ggcs-ros-humble-apt-cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=ggcs-ros-humble-apt-lists,target=/var/lib/apt/lists,sharing=locked \
+    ggcs-configure-registries \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
       ros-${ROS_DISTRO}-rosbridge-server \
-      ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
-    && rm -rf /var/lib/apt/lists/*
+      ros-${ROS_DISTRO}-rmw-cyclonedds-cpp
 
 ENV RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 ENV ROS_LOCALHOST_ONLY=0

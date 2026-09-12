@@ -4,7 +4,7 @@ ARG DOCKER_REGISTRY=docker.io
 ARG NODE_VERSION=22.23.2
 ARG PNPM_VERSION=10.34.5
 
-FROM ${DOCKER_REGISTRY}/library/node:${NODE_VERSION}-bookworm AS workspace
+FROM ${DOCKER_REGISTRY}/library/node:${NODE_VERSION}-bookworm AS workspace-base
 ARG PNPM_VERSION
 ARG NEXUS_NPM_REGISTRY=""
 ARG NEXUS_PYPI_INDEX_URL=""
@@ -27,16 +27,37 @@ RUN ggcs-configure-registries \
     && corepack enable \
     && corepack prepare "pnpm@${PNPM_VERSION}" --activate
 
-COPY . .
-RUN if [ -n "${NEXUS_NPM_REGISTRY}" ]; then \
+# Keep dependency resolution independent from frequently changing source files.
+# New workspace packages must add their package.json here when introduced.
+FROM workspace-base AS dependencies
+COPY package.json pnpm-workspace.yaml ./
+COPY packages/core/package.json packages/core/package.json
+COPY packages/plugin-sdk/package.json packages/plugin-sdk/package.json
+COPY packages/ros/package.json packages/ros/package.json
+COPY packages/schema/package.json packages/schema/package.json
+COPY packages/testing/package.json packages/testing/package.json
+COPY packages/transport-rosbridge/package.json packages/transport-rosbridge/package.json
+COPY apps/examples/minimal-headless/package.json apps/examples/minimal-headless/package.json
+COPY apps/examples/rosbridge-command-headless/package.json apps/examples/rosbridge-command-headless/package.json
+COPY apps/examples/rosbridge-headless/package.json apps/examples/rosbridge-headless/package.json
+COPY apps/examples/rosbridge-parameter-headless/package.json apps/examples/rosbridge-parameter-headless/package.json
+COPY apps/examples/rosbridge-service-headless/package.json apps/examples/rosbridge-service-headless/package.json
+COPY apps/examples/rosbridge-topic-headless/package.json apps/examples/rosbridge-topic-headless/package.json
+RUN --mount=type=cache,id=ggcs-pnpm-store,target=/pnpm/store,sharing=locked \
+    if [ -n "${NEXUS_NPM_REGISTRY}" ]; then \
       export NPM_CONFIG_REGISTRY="${NEXUS_NPM_REGISTRY%/}/"; \
     fi \
+    && pnpm config set store-dir /pnpm/store \
     && if [ -f pnpm-lock.yaml ]; then \
       pnpm install --frozen-lockfile; \
     else \
       echo "WARNING: pnpm-lock.yaml is missing; installing without --frozen-lockfile"; \
       pnpm install; \
     fi
+
+FROM workspace-base AS workspace
+COPY --from=dependencies /workspace/ /workspace/
+COPY . .
 
 FROM workspace AS m01-verify
 CMD ["pnpm", "run", "verify:m01"]
