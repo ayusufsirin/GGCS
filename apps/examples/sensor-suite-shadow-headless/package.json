@@ -1,0 +1,23 @@
+{
+  "name": "@ggcs/example-sensor-suite-shadow-headless",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@ggcs/arnav": "workspace:*",
+    "@ggcs/core": "workspace:*",
+    "@ggcs/ros": "workspace:*",
+    "@ggcs/schema": "workspace:*",
+    "@ggcs/transforms": "workspace:*",
+    "@ggcs/transport-rosbridge": "workspace:*"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "start": "node dist/index.js",
+    "test": "vitest run --config vitest.config.mts"
+  },
+  "devDependencies": {
+    "typescript": "5.8.3",
+    "vitest": "4.1.11"
+  }
+}
