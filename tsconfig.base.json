@@ -32,6 +32,9 @@
       ],
       "@ggcs/ros": [
         "packages/ros/src/index.ts"
+      ],
+      "@ggcs/transforms": [
+        "packages/transforms/src/index.ts"
       ]
     },
     "lib": [

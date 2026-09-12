@@ -36,6 +36,7 @@ COPY packages/plugin-sdk/package.json packages/plugin-sdk/package.json
 COPY packages/ros/package.json packages/ros/package.json
 COPY packages/schema/package.json packages/schema/package.json
 COPY packages/testing/package.json packages/testing/package.json
+COPY packages/transforms/package.json packages/transforms/package.json
 COPY packages/transport-rosbridge/package.json packages/transport-rosbridge/package.json
 COPY apps/examples/minimal-headless/package.json apps/examples/minimal-headless/package.json
 COPY apps/examples/rosbridge-command-headless/package.json apps/examples/rosbridge-command-headless/package.json
