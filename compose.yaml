@@ -112,6 +112,18 @@ services:
         PNPM_VERSION: ${GGCS_PNPM_VERSION:-10.34.5}
     command: ["pnpm", "run", "verify:m02"]
 
+  m03-verify:
+    profiles: ["m03"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: m03-verify
+      args:
+        <<: *registry-build-args
+        NODE_VERSION: ${GGCS_NODE_VERSION:-22.23.2}
+        PNPM_VERSION: ${GGCS_PNPM_VERSION:-10.34.5}
+    command: ["pnpm", "run", "verify:m03"]
+
   m02-connection-smoke:
     profiles: ["m02"]
     build:

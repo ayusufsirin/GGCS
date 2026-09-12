@@ -17,6 +17,7 @@
     "test": "vitest run --config vitest.config.mts"
   },
   "devDependencies": {
+    "@ggcs/testing": "workspace:*",
     "typescript": "5.8.3",
     "vitest": "4.1.11"
   }

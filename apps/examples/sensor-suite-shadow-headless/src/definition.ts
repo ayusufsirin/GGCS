@@ -71,6 +71,29 @@ function derived(
   };
 }
 
+export function createArnavSemanticResources(rawSourceId: string): readonly BaseResourceDefinition[] {
+  const ids = SENSOR_SUITE_RESOURCE_IDS;
+  return [
+    derived(ids.arnavRollRad, CORE_TYPE_IDS.number, ARNAV_COMPUTATION_IDS.rollRad, rawSourceId),
+    derived(ids.arnavPitchRad, CORE_TYPE_IDS.number, ARNAV_COMPUTATION_IDS.pitchRad, rawSourceId),
+    derived(ids.arnavYawRad, CORE_TYPE_IDS.number, ARNAV_COMPUTATION_IDS.yawRad, rawSourceId),
+    derived(ids.arnavLatitudeRad, CORE_TYPE_IDS.number, ARNAV_COMPUTATION_IDS.latitudeRad, rawSourceId),
+    derived(ids.arnavLongitudeRad, CORE_TYPE_IDS.number, ARNAV_COMPUTATION_IDS.longitudeRad, rawSourceId),
+    derived(ids.navAltitudeM, CORE_TYPE_IDS.number, ARNAV_COMPUTATION_IDS.altitudeM, rawSourceId),
+    derived(ids.healthSystem, CORE_TYPE_IDS.boolean, ARNAV_COMPUTATION_IDS.healthSystem, rawSourceId),
+    derived(ids.healthRollPitch, CORE_TYPE_IDS.boolean, ARNAV_COMPUTATION_IDS.healthRollPitch, rawSourceId),
+    derived(ids.healthYaw, CORE_TYPE_IDS.boolean, ARNAV_COMPUTATION_IDS.healthYaw, rawSourceId),
+    derived(ids.healthPositionVelocity, CORE_TYPE_IDS.boolean, ARNAV_COMPUTATION_IDS.healthPositionVelocity, rawSourceId),
+    derived(ids.healthMagnetometer, CORE_TYPE_IDS.boolean, ARNAV_COMPUTATION_IDS.healthMagnetometer, rawSourceId),
+    derived(ids.healthGnssFixed, CORE_TYPE_IDS.boolean, ARNAV_COMPUTATION_IDS.healthGnssFixed, rawSourceId),
+    derived(ids.navRollDeg, CORE_TYPE_IDS.number, TRANSFORM_COMPUTATION_IDS.angleRadToDeg, ids.arnavRollRad),
+    derived(ids.navPitchDeg, CORE_TYPE_IDS.number, TRANSFORM_COMPUTATION_IDS.angleRadToDeg, ids.arnavPitchRad),
+    derived(ids.navHeadingDeg, CORE_TYPE_IDS.number, TRANSFORM_COMPUTATION_IDS.angleRadToDeg, ids.arnavYawRad),
+    derived(ids.navLatitudeDeg, CORE_TYPE_IDS.number, TRANSFORM_COMPUTATION_IDS.angleRadToDeg, ids.arnavLatitudeRad),
+    derived(ids.navLongitudeDeg, CORE_TYPE_IDS.number, TRANSFORM_COMPUTATION_IDS.angleRadToDeg, ids.arnavLongitudeRad),
+  ];
+}
+
 export function createSensorSuiteShadowDefinition(options: {
   readonly rosbridgeUrl: string;
 }): ApplicationDefinition {
@@ -108,23 +131,7 @@ export function createSensorSuiteShadowDefinition(options: {
           messageType: ARNAV_INS_MESSAGE_TYPE,
         },
       },
-      derived(ids.arnavRollRad, CORE_TYPE_IDS.number, ARNAV_COMPUTATION_IDS.rollRad, ids.arnavInsRaw),
-      derived(ids.arnavPitchRad, CORE_TYPE_IDS.number, ARNAV_COMPUTATION_IDS.pitchRad, ids.arnavInsRaw),
-      derived(ids.arnavYawRad, CORE_TYPE_IDS.number, ARNAV_COMPUTATION_IDS.yawRad, ids.arnavInsRaw),
-      derived(ids.arnavLatitudeRad, CORE_TYPE_IDS.number, ARNAV_COMPUTATION_IDS.latitudeRad, ids.arnavInsRaw),
-      derived(ids.arnavLongitudeRad, CORE_TYPE_IDS.number, ARNAV_COMPUTATION_IDS.longitudeRad, ids.arnavInsRaw),
-      derived(ids.navAltitudeM, CORE_TYPE_IDS.number, ARNAV_COMPUTATION_IDS.altitudeM, ids.arnavInsRaw),
-      derived(ids.healthSystem, CORE_TYPE_IDS.boolean, ARNAV_COMPUTATION_IDS.healthSystem, ids.arnavInsRaw),
-      derived(ids.healthRollPitch, CORE_TYPE_IDS.boolean, ARNAV_COMPUTATION_IDS.healthRollPitch, ids.arnavInsRaw),
-      derived(ids.healthYaw, CORE_TYPE_IDS.boolean, ARNAV_COMPUTATION_IDS.healthYaw, ids.arnavInsRaw),
-      derived(ids.healthPositionVelocity, CORE_TYPE_IDS.boolean, ARNAV_COMPUTATION_IDS.healthPositionVelocity, ids.arnavInsRaw),
-      derived(ids.healthMagnetometer, CORE_TYPE_IDS.boolean, ARNAV_COMPUTATION_IDS.healthMagnetometer, ids.arnavInsRaw),
-      derived(ids.healthGnssFixed, CORE_TYPE_IDS.boolean, ARNAV_COMPUTATION_IDS.healthGnssFixed, ids.arnavInsRaw),
-      derived(ids.navRollDeg, CORE_TYPE_IDS.number, TRANSFORM_COMPUTATION_IDS.angleRadToDeg, ids.arnavRollRad),
-      derived(ids.navPitchDeg, CORE_TYPE_IDS.number, TRANSFORM_COMPUTATION_IDS.angleRadToDeg, ids.arnavPitchRad),
-      derived(ids.navHeadingDeg, CORE_TYPE_IDS.number, TRANSFORM_COMPUTATION_IDS.angleRadToDeg, ids.arnavYawRad),
-      derived(ids.navLatitudeDeg, CORE_TYPE_IDS.number, TRANSFORM_COMPUTATION_IDS.angleRadToDeg, ids.arnavLatitudeRad),
-      derived(ids.navLongitudeDeg, CORE_TYPE_IDS.number, TRANSFORM_COMPUTATION_IDS.angleRadToDeg, ids.arnavLongitudeRad),
+      ...createArnavSemanticResources(ids.arnavInsRaw),
     ],
   };
 }
