@@ -35,6 +35,9 @@
       ],
       "@ggcs/transforms": [
         "packages/transforms/src/index.ts"
+      ],
+      "@ggcs/arnav": [
+        "plugins/arnav/src/index.ts"
       ]
     },
     "lib": [

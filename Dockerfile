@@ -38,6 +38,7 @@ COPY packages/schema/package.json packages/schema/package.json
 COPY packages/testing/package.json packages/testing/package.json
 COPY packages/transforms/package.json packages/transforms/package.json
 COPY packages/transport-rosbridge/package.json packages/transport-rosbridge/package.json
+COPY plugins/arnav/package.json plugins/arnav/package.json
 COPY apps/examples/minimal-headless/package.json apps/examples/minimal-headless/package.json
 COPY apps/examples/rosbridge-command-headless/package.json apps/examples/rosbridge-command-headless/package.json
 COPY apps/examples/rosbridge-headless/package.json apps/examples/rosbridge-headless/package.json

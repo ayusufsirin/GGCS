@@ -1,0 +1,28 @@
+{
+  "name": "@ggcs/arnav",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "dependencies": {
+    "@ggcs/plugin-sdk": "workspace:*",
+    "@ggcs/ros": "workspace:*",
+    "@ggcs/schema": "workspace:*"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "test": "vitest run --config vitest.config.mts"
+  },
+  "devDependencies": {
+    "typescript": "5.8.3",
+    "vitest": "4.1.11"
+  }
+}
