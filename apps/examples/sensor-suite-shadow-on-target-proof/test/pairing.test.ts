@@ -8,13 +8,14 @@ describe("bounded-skew on-target pairing", () => {
     recorder.recordGgcs(10.05, 107);
     recorder.recordGgcs(20.02, 205);
     recorder.recordLegacy(20, 200);
-    expect(recorder.report()).toMatchObject({
+    const report = recorder.report();
+    expect(report).toMatchObject({
       matched: 2,
       mismatched: 0,
       legacySkewMisses: 0,
       ggcsSkewMisses: 0,
-      maxAbsoluteDelta: 0.05,
     });
+    expect(report.maxAbsoluteDelta).toBeCloseTo(0.05, 12);
   });
 
   it("records skew misses separately from semantic mismatches", () => {
