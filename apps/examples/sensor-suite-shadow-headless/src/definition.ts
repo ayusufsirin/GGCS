@@ -11,7 +11,11 @@ import {
   ARNAV_PLUGIN_ID,
   createArnavPlugin,
 } from "@ggcs/arnav";
-import { ROS_PLUGIN_ID, createRosDomainPlugin } from "@ggcs/ros";
+import {
+  ROS_PLUGIN_ID,
+  createRosDomainPlugin,
+  rosServiceTypeId,
+} from "@ggcs/ros";
 import {
   ROS_STD_COMPUTATION_IDS,
   ROS_STD_MESSAGE_TYPES,
@@ -42,6 +46,18 @@ export const SENSOR_SUITE_SPEED_TOPIC = "/speed" as const;
 export const SENSOR_SUITE_ACCELERATION_TOPIC = "/accel" as const;
 export const SENSOR_SUITE_SATELLITES_TOPIC = "/arnav/satellites" as const;
 
+export const SENSOR_SUITE_RECORDING_SERVICES = {
+  zedStart: "/zed/zed_node/start_svo_rec",
+  zedStop: "/zed/zed_node/stop_svo_rec",
+  bagStart: "/bag_recorder/start_bag_recording",
+  bagStop: "/bag_recorder/stop_bag_recording",
+} as const;
+
+export const SENSOR_SUITE_RECORDING_SERVICE_TYPES = {
+  zedStart: "zed_msgs/srv/StartSvoRec",
+  trigger: "std_srvs/srv/Trigger",
+} as const;
+
 export const SENSOR_SUITE_RESOURCE_IDS = {
   connection: "robot",
   arnavInsRaw: "arnav.ins.raw",
@@ -68,6 +84,11 @@ export const SENSOR_SUITE_RESOURCE_IDS = {
   healthPositionVelocity: "arnav.health.positionVelocity",
   healthMagnetometer: "arnav.health.magnetometer",
   healthGnssFixed: "arnav.health.gnssFixed",
+  rtkFixedLegacy: "arnav.display.rtkFixedLegacy",
+  zedRecordingStart: "zed.recording.start",
+  zedRecordingStop: "zed.recording.stop",
+  bagRecordingStart: "bag.recording.start",
+  bagRecordingStop: "bag.recording.stop",
 } as const;
 
 function derived(
@@ -102,6 +123,10 @@ export function createArnavSemanticResources(rawSourceId: string): readonly Base
     derived(ids.healthPositionVelocity, CORE_TYPE_IDS.boolean, ARNAV_COMPUTATION_IDS.healthPositionVelocity, rawSourceId),
     derived(ids.healthMagnetometer, CORE_TYPE_IDS.boolean, ARNAV_COMPUTATION_IDS.healthMagnetometer, rawSourceId),
     derived(ids.healthGnssFixed, CORE_TYPE_IDS.boolean, ARNAV_COMPUTATION_IDS.healthGnssFixed, rawSourceId),
+    // Legacy RTK display source truth is status.gnss_fixed. Keep this as an
+    // explicit compatibility resource without inventing a separate RTK bit.
+    // Both resources still originate from the one shared raw ArNav Source.
+    derived(ids.rtkFixedLegacy, CORE_TYPE_IDS.boolean, ARNAV_COMPUTATION_IDS.healthGnssFixed, rawSourceId),
     derived(ids.navRollDeg, CORE_TYPE_IDS.number, TRANSFORM_COMPUTATION_IDS.angleRadToDeg, ids.arnavRollRad),
     derived(ids.navPitchDeg, CORE_TYPE_IDS.number, TRANSFORM_COMPUTATION_IDS.angleRadToDeg, ids.arnavPitchRad),
     derived(ids.navHeadingDeg, CORE_TYPE_IDS.number, TRANSFORM_COMPUTATION_IDS.angleRadToDeg, ids.arnavYawRad),
@@ -137,6 +162,23 @@ function topicSource(options: {
       connection: SENSOR_SUITE_RESOURCE_IDS.connection,
       topic: options.topic,
       messageType: options.messageType,
+    },
+  };
+}
+
+function serviceProcedure(options: {
+  readonly id: string;
+  readonly service: string;
+  readonly serviceType: string;
+}): BaseResourceDefinition {
+  return {
+    id: options.id,
+    provider: ROSBRIDGE_PROVIDER_IDS.serviceProcedure,
+    type: rosServiceTypeId(options.serviceType),
+    config: {
+      connection: SENSOR_SUITE_RESOURCE_IDS.connection,
+      service: options.service,
+      serviceType: options.serviceType,
     },
   };
 }
@@ -199,6 +241,30 @@ export function createSensorSuiteShadowDefinition(options: {
         accelerationRawSourceId: ids.vehicleAccelerationRaw,
         satellitesRawSourceId: ids.arnavSatellitesRaw,
       }),
+      // Shadow mode prepares the real production Procedure definitions only.
+      // Nothing in this application invokes them. In particular, the legacy
+      // module-load SVO filename timestamp behavior remains documented debt and
+      // is not silently reinterpreted as invocation-time request construction.
+      serviceProcedure({
+        id: ids.zedRecordingStart,
+        service: SENSOR_SUITE_RECORDING_SERVICES.zedStart,
+        serviceType: SENSOR_SUITE_RECORDING_SERVICE_TYPES.zedStart,
+      }),
+      serviceProcedure({
+        id: ids.zedRecordingStop,
+        service: SENSOR_SUITE_RECORDING_SERVICES.zedStop,
+        serviceType: SENSOR_SUITE_RECORDING_SERVICE_TYPES.trigger,
+      }),
+      serviceProcedure({
+        id: ids.bagRecordingStart,
+        service: SENSOR_SUITE_RECORDING_SERVICES.bagStart,
+        serviceType: SENSOR_SUITE_RECORDING_SERVICE_TYPES.trigger,
+      }),
+      serviceProcedure({
+        id: ids.bagRecordingStop,
+        service: SENSOR_SUITE_RECORDING_SERVICES.bagStop,
+        serviceType: SENSOR_SUITE_RECORDING_SERVICE_TYPES.trigger,
+      }),
     ],
   };
 }
@@ -212,6 +278,10 @@ export function createSensorSuiteShadowRegistry(
         ARNAV_INS_MESSAGE_TYPE,
         ROS_STD_MESSAGE_TYPES.float64,
         ROS_STD_MESSAGE_TYPES.int64,
+      ],
+      serviceTypes: [
+        SENSOR_SUITE_RECORDING_SERVICE_TYPES.zedStart,
+        SENSOR_SUITE_RECORDING_SERVICE_TYPES.trigger,
       ],
     }))
     .register(createRosbridgeTransportPlugin(transportOptions))

@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { DERIVED_PROVIDER_ID } from "@ggcs/core";
-import { ARNAV_INS_MESSAGE_TYPE, ARNAV_INS_TYPE_ID } from "@ggcs/arnav";
+import { ARNAV_COMPUTATION_IDS, ARNAV_INS_MESSAGE_TYPE, ARNAV_INS_TYPE_ID } from "@ggcs/arnav";
+import { rosServiceTypeId } from "@ggcs/ros";
 import { ROS_STD_MESSAGE_TYPES, ROS_STD_TYPE_IDS } from "@ggcs/ros-std-msgs";
 import { ROSBRIDGE_PROVIDER_IDS, type RosbridgeClientFactory } from "@ggcs/transport-rosbridge";
 import {
   SENSOR_SUITE_ACCELERATION_TOPIC,
   SENSOR_SUITE_ARNAV_TOPIC,
+  SENSOR_SUITE_RECORDING_SERVICES,
+  SENSOR_SUITE_RECORDING_SERVICE_TYPES,
   SENSOR_SUITE_RESOURCE_IDS,
   SENSOR_SUITE_SATELLITES_TOPIC,
   SENSOR_SUITE_SPEED_TOPIC,
@@ -14,7 +17,7 @@ import {
 } from "../src/definition.js";
 
 describe("Sensor Suite shadow definition", () => {
-  it("compiles the production-shaped low-bandwidth graph without opening a ROSBridge client", () => {
+  it("compiles the production-shaped graph without opening a ROSBridge client", () => {
     let createCalls = 0;
     const clientFactory: RosbridgeClientFactory = {
       create() {
@@ -80,27 +83,100 @@ describe("Sensor Suite shadow definition", () => {
     ]));
   });
 
-  it("keeps every non-raw semantic resource derived", () => {
+  it("maps the legacy RTK display explicitly to the existing gnss_fixed semantic truth", () => {
     const definition = createSensorSuiteShadowDefinition({ rosbridgeUrl: "ws://shadow.invalid:9090" });
-    const rawIds = new Set<string>([
+    const health = definition.resources.find((resource) => resource.id === SENSOR_SUITE_RESOURCE_IDS.healthGnssFixed);
+    const legacyAlias = definition.resources.find((resource) => resource.id === SENSOR_SUITE_RESOURCE_IDS.rtkFixedLegacy);
+    expect(health).toMatchObject({
+      provider: DERIVED_PROVIDER_ID,
+      config: {
+        computation: ARNAV_COMPUTATION_IDS.healthGnssFixed,
+        inputs: { input: SENSOR_SUITE_RESOURCE_IDS.arnavInsRaw },
+      },
+    });
+    expect(legacyAlias).toMatchObject({
+      provider: DERIVED_PROVIDER_ID,
+      config: {
+        computation: ARNAV_COMPUTATION_IDS.healthGnssFixed,
+        inputs: { input: SENSOR_SUITE_RESOURCE_IDS.arnavInsRaw },
+      },
+    });
+  });
+
+  it("keeps non-operational semantic resources derived", () => {
+    const definition = createSensorSuiteShadowDefinition({ rosbridgeUrl: "ws://shadow.invalid:9090" });
+    const excludedIds = new Set<string>([
       SENSOR_SUITE_RESOURCE_IDS.connection,
       SENSOR_SUITE_RESOURCE_IDS.arnavInsRaw,
       SENSOR_SUITE_RESOURCE_IDS.vehicleSpeedRaw,
       SENSOR_SUITE_RESOURCE_IDS.vehicleAccelerationRaw,
       SENSOR_SUITE_RESOURCE_IDS.arnavSatellitesRaw,
+      SENSOR_SUITE_RESOURCE_IDS.zedRecordingStart,
+      SENSOR_SUITE_RESOURCE_IDS.zedRecordingStop,
+      SENSOR_SUITE_RESOURCE_IDS.bagRecordingStart,
+      SENSOR_SUITE_RESOURCE_IDS.bagRecordingStop,
     ]);
-    const semanticResources = definition.resources.filter((resource) => !rawIds.has(resource.id));
-    expect(semanticResources).toHaveLength(Object.keys(SENSOR_SUITE_RESOURCE_IDS).length - rawIds.size);
+    const semanticResources = definition.resources.filter((resource) => !excludedIds.has(resource.id));
+    expect(semanticResources).toHaveLength(Object.keys(SENSOR_SUITE_RESOURCE_IDS).length - excludedIds.size);
     for (const resource of semanticResources) {
       expect(resource.provider).toBe(DERIVED_PROVIDER_ID);
     }
   });
 
-  it("contains no shadow command, procedure, or parameter-write resource", () => {
+  it("defines all production recording Procedures without invoking them", () => {
+    const definition = createSensorSuiteShadowDefinition({ rosbridgeUrl: "ws://shadow.invalid:9090" });
+    const procedures = definition.resources.filter(
+      (resource) => resource.provider === ROSBRIDGE_PROVIDER_IDS.serviceProcedure,
+    );
+    expect(procedures).toHaveLength(4);
+    expect(procedures).toEqual(expect.arrayContaining([
+      {
+        id: SENSOR_SUITE_RESOURCE_IDS.zedRecordingStart,
+        provider: ROSBRIDGE_PROVIDER_IDS.serviceProcedure,
+        type: rosServiceTypeId(SENSOR_SUITE_RECORDING_SERVICE_TYPES.zedStart),
+        config: {
+          connection: SENSOR_SUITE_RESOURCE_IDS.connection,
+          service: SENSOR_SUITE_RECORDING_SERVICES.zedStart,
+          serviceType: SENSOR_SUITE_RECORDING_SERVICE_TYPES.zedStart,
+        },
+      },
+      {
+        id: SENSOR_SUITE_RESOURCE_IDS.zedRecordingStop,
+        provider: ROSBRIDGE_PROVIDER_IDS.serviceProcedure,
+        type: rosServiceTypeId(SENSOR_SUITE_RECORDING_SERVICE_TYPES.trigger),
+        config: {
+          connection: SENSOR_SUITE_RESOURCE_IDS.connection,
+          service: SENSOR_SUITE_RECORDING_SERVICES.zedStop,
+          serviceType: SENSOR_SUITE_RECORDING_SERVICE_TYPES.trigger,
+        },
+      },
+      {
+        id: SENSOR_SUITE_RESOURCE_IDS.bagRecordingStart,
+        provider: ROSBRIDGE_PROVIDER_IDS.serviceProcedure,
+        type: rosServiceTypeId(SENSOR_SUITE_RECORDING_SERVICE_TYPES.trigger),
+        config: {
+          connection: SENSOR_SUITE_RESOURCE_IDS.connection,
+          service: SENSOR_SUITE_RECORDING_SERVICES.bagStart,
+          serviceType: SENSOR_SUITE_RECORDING_SERVICE_TYPES.trigger,
+        },
+      },
+      {
+        id: SENSOR_SUITE_RESOURCE_IDS.bagRecordingStop,
+        provider: ROSBRIDGE_PROVIDER_IDS.serviceProcedure,
+        type: rosServiceTypeId(SENSOR_SUITE_RECORDING_SERVICE_TYPES.trigger),
+        config: {
+          connection: SENSOR_SUITE_RESOURCE_IDS.connection,
+          service: SENSOR_SUITE_RECORDING_SERVICES.bagStop,
+          serviceType: SENSOR_SUITE_RECORDING_SERVICE_TYPES.trigger,
+        },
+      },
+    ]));
+  });
+
+  it("contains no production shadow Command or parameter provider yet", () => {
     const definition = createSensorSuiteShadowDefinition({ rosbridgeUrl: "ws://shadow.invalid:9090" });
     const forbiddenProviders = new Set([
       ROSBRIDGE_PROVIDER_IDS.topicCommand,
-      ROSBRIDGE_PROVIDER_IDS.serviceProcedure,
       ROSBRIDGE_PROVIDER_IDS.parameterProvider,
     ]);
     expect(definition.resources.some((resource) => forbiddenProviders.has(resource.provider as never))).toBe(false);

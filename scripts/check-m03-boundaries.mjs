@@ -135,7 +135,7 @@ for (const sideEffectProvider of ["topicCommand", "serviceProcedure"]) {
 }
 
 const definitionSource = fs.readFileSync(path.join(shadowDir, "src", "definition.ts"), "utf8");
-for (const sideEffectProvider of ["topicCommand", "serviceProcedure", "parameterProvider"]) {
+for (const sideEffectProvider of ["topicCommand", "parameterProvider"]) {
   if (definitionSource.includes(`ROSBRIDGE_PROVIDER_IDS.${sideEffectProvider}`)) {
     violations.push(`shadow definition references forbidden side-effect provider ${sideEffectProvider}`);
   }
