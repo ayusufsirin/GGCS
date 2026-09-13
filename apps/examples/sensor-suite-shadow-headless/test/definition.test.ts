@@ -82,7 +82,7 @@ describe("Sensor Suite shadow definition", () => {
 
   it("keeps every non-raw semantic resource derived", () => {
     const definition = createSensorSuiteShadowDefinition({ rosbridgeUrl: "ws://shadow.invalid:9090" });
-    const rawIds = new Set([
+    const rawIds = new Set<string>([
       SENSOR_SUITE_RESOURCE_IDS.connection,
       SENSOR_SUITE_RESOURCE_IDS.arnavInsRaw,
       SENSOR_SUITE_RESOURCE_IDS.vehicleSpeedRaw,

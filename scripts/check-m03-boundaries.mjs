@@ -3,6 +3,7 @@ import path from "node:path";
 
 const root = path.resolve(import.meta.dirname, "..");
 const transformsDir = path.join(root, "packages", "transforms");
+const rosStdMsgsDir = path.join(root, "packages", "ros-std-msgs");
 const arnavDir = path.join(root, "plugins", "arnav");
 const shadowDir = path.join(root, "apps", "examples", "sensor-suite-shadow-headless");
 const violations = [];
@@ -29,6 +30,11 @@ requireAllowedDependencies(
   new Set(["@ggcs/plugin-sdk", "@ggcs/schema"]),
 );
 requireAllowedDependencies(
+  "@ggcs/ros-std-msgs",
+  rosStdMsgsDir,
+  new Set(["@ggcs/plugin-sdk", "@ggcs/ros", "@ggcs/schema"]),
+);
+requireAllowedDependencies(
   "@ggcs/arnav",
   arnavDir,
   new Set(["@ggcs/plugin-sdk", "@ggcs/ros", "@ggcs/schema"]),
@@ -40,6 +46,7 @@ requireAllowedDependencies(
     "@ggcs/arnav",
     "@ggcs/core",
     "@ggcs/ros",
+    "@ggcs/ros-std-msgs",
     "@ggcs/schema",
     "@ggcs/transforms",
     "@ggcs/transport-rosbridge",
@@ -73,6 +80,10 @@ scan(transformsDir, {
   forbiddenImports: ["@ggcs/ros", "@ggcs/transport-rosbridge", "@ggcs/arnav", "roslib", ...uiImports],
   forbiddenTokens: ["window.", "document.", "navigator.", "/ArdicLabs/Arnav/Gnss_Ins_data"],
 });
+scan(rosStdMsgsDir, {
+  forbiddenImports: ["@ggcs/transport-rosbridge", "roslib", ...uiImports],
+  forbiddenTokens: ["window.", "document.", "navigator.", "/speed", "/accel", "/arnav/satellites"],
+});
 scan(arnavDir, {
   forbiddenImports: ["@ggcs/transport-rosbridge", "roslib", ...uiImports],
   forbiddenTokens: ["window.", "document.", "navigator.", "/ArdicLabs/Arnav/Gnss_Ins_data"],
@@ -91,6 +102,7 @@ for (const sideEffectProvider of ["topicCommand", "serviceProcedure", "parameter
 
 for (const [label, directory] of [
   ["@ggcs/transforms", transformsDir],
+  ["@ggcs/ros-std-msgs", rosStdMsgsDir],
   ["@ggcs/arnav", arnavDir],
 ]) {
   if (!readPackage(directory).exports?.["."]) {
