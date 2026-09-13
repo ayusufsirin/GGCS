@@ -8,7 +8,7 @@ from std_msgs.msg import Float64, Int64
 class ShadowFixture(Node):
     def __init__(self) -> None:
         super().__init__("ggcs_m03_shadow_fixture")
-        self.declare_parameter("ggcs_shadow_test_parameter", "12.5")
+        self.declare_parameter("ggcs_shadow_test_parameter", 12.5)
 
         self.speed_publisher = self.create_publisher(Float64, "/speed", 10)
         self.acceleration_publisher = self.create_publisher(Float64, "/accel", 10)
@@ -23,7 +23,7 @@ class ShadowFixture(Node):
         )
         self.get_logger().info(
             "M03 shadow fixture declaring read-only proof parameter "
-            "ggcs_shadow_test_parameter='12.5'"
+            "ggcs_shadow_test_parameter=12.5"
         )
 
     def publish_sample(self) -> None:

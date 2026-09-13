@@ -1,5 +1,6 @@
 import {
   type Connection,
+  type ParameterProvider,
   type Source,
   type Subscription,
 } from "@ggcs/core";
@@ -8,6 +9,7 @@ import {
   compileLiveShadowApplication,
 } from "./definition.js";
 import { LegacyReferenceObserver } from "./legacy-reference.js";
+import { buildWindowReport, assertStableWindow } from "./report.js";
 import {
   SampleRecorder,
   matchedValues,
@@ -28,6 +30,7 @@ const resourceIds = [
   LIVE_RESOURCE_IDS.satellites,
 ] as const;
 type ResourceId = (typeof resourceIds)[number];
+const parameterId = "/ggcs_m03_shadow_fixture:ggcs_shadow_test_parameter";
 
 const legacyRecorders = new Map<ResourceId, SampleRecorder>(
   resourceIds.map((id) => [id, new SampleRecorder()]),
@@ -93,24 +96,35 @@ try {
 
   const resources = Object.fromEntries(
     resourceIds.map((id) => {
-      const legacyRecorder = legacyRecorders.get(id)!;
-      const ggcsRecorder = ggcsRecorders.get(id)!;
-      const matched = matchedValues(legacyRecorder, ggcsRecorder, stage);
-      return [
-        id,
-        {
-          legacyUniqueSamples: legacyRecorder.uniqueValues(stage).size,
-          ggcsUniqueSamples: ggcsRecorder.uniqueValues(stage).size,
-          matchedUniqueValues: matched.length,
-          legacyDuplicateDeliveries: legacyRecorder.duplicateDeliveries(stage),
-          ggcsDuplicateDeliveries: ggcsRecorder.duplicateDeliveries(stage),
-          maxAbsoluteError: 0,
-          legacyRateHz: legacyRecorder.rateHz(stage),
-          ggcsRateHz: ggcsRecorder.rateHz(stage),
-        },
-      ];
+      const report = buildWindowReport(
+        legacyRecorders.get(id)!,
+        ggcsRecorders.get(id)!,
+        stage,
+      );
+      assertStableWindow(report);
+      return [id, report];
     }),
   );
+
+  const referenceNodes = await legacy.listNodes(timeoutMs);
+  if (!referenceNodes.includes("/ggcs_m03_shadow_fixture")) {
+    throw new Error("Legacy reference did not discover /ggcs_m03_shadow_fixture via /rosapi/nodes");
+  }
+  const referenceParameterValue = await legacy.getParameter(parameterId, timeoutMs);
+  const parameterProvider = runtime.resource<ParameterProvider>(LIVE_RESOURCE_IDS.parameters);
+  const descriptors = await parameterProvider.list({ prefix: "/ggcs_m03_shadow_fixture:" });
+  const descriptor = descriptors.find((candidate) => candidate.id === parameterId);
+  if (!descriptor) throw new Error(`GGCS ParameterProvider did not discover ${parameterId}`);
+  if ("defaultValue" in descriptor) {
+    throw new Error("GGCS ParameterProvider must not synthesize parameter defaultValue");
+  }
+  const parameter = await parameterProvider.resolve<string>(parameterId);
+  const ggcsParameterValue = await parameter.refresh().result();
+  if (ggcsParameterValue !== referenceParameterValue) {
+    throw new Error(
+      `Parameter value mismatch: legacy=${referenceParameterValue}, ggcs=${ggcsParameterValue}`,
+    );
+  }
 
   platform.console?.log(
     JSON.stringify(
@@ -121,6 +135,13 @@ try {
         connection: connection.current(),
         legacyConnectionStates: legacyStates,
         resources,
+        parameter: {
+          id: parameterId,
+          discoveryMechanism: { legacy: "/rosapi/nodes + /rosapi/get_param", ggcs: "/rosapi/nodes + node ListParameters + /rosapi/get_param" },
+          legacyValue: referenceParameterValue,
+          ggcsValue: ggcsParameterValue,
+          descriptor,
+        },
       },
       null,
       2,

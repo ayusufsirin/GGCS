@@ -38,6 +38,7 @@ export const LIVE_RESOURCE_IDS = {
   speed: "vehicle.speed",
   acceleration: "vehicle.acceleration",
   satellites: "arnav.satellites",
+  parameters: "shadow.parameters",
 } as const;
 
 function topicSource(options: {
@@ -119,6 +120,12 @@ export function createLiveShadowDefinition(options: {
         ids.accelerationRaw,
       ),
       derived(ids.satellites, ROS_STD_COMPUTATION_IDS.int64Data, ids.satellitesRaw),
+      {
+        id: ids.parameters,
+        provider: ROSBRIDGE_PROVIDER_IDS.parameterProvider,
+        type: CORE_TYPE_IDS.object,
+        config: { connection: ids.connection, timeoutMs: 15_000 },
+      },
     ],
   };
 }
