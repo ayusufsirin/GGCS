@@ -238,3 +238,80 @@ services:
       m02-ros-fixture:
         condition: service_started
     command: ["pnpm", "run", "example:m02:parameter"]
+
+  # M03 live-shadow proof world. This remains isolated from M02 fixtures and
+  # from the production Web application; all traffic is observational/read-only.
+  m03-live-rosbridge:
+    profiles: ["m03-live"]
+    build:
+      context: .
+      dockerfile: rosbridge.Dockerfile
+      args:
+        <<: *registry-build-args
+    environment:
+      RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
+      ROS_LOCALHOST_ONLY: "0"
+      CYCLONEDDS_URI: >-
+        <CycloneDDS><Domain><General><Interfaces><NetworkInterface name="eth0" multicast="true"/></Interfaces><AllowMulticast>true</AllowMulticast></General></Domain></CycloneDDS>
+    restart: unless-stopped
+
+  m03-live-fixture:
+    profiles: ["m03-live"]
+    build:
+      context: .
+      dockerfile: m03fixture.Dockerfile
+      args:
+        <<: *registry-build-args
+    environment:
+      RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
+      ROS_LOCALHOST_ONLY: "0"
+      CYCLONEDDS_URI: >-
+        <CycloneDDS><Domain><General><Interfaces><NetworkInterface name="eth0" multicast="true"/></Interfaces><AllowMulticast>true</AllowMulticast></General></Domain></CycloneDDS>
+    depends_on:
+      m03-live-rosbridge:
+        condition: service_started
+    restart: unless-stopped
+
+  m03-link-proxy:
+    profiles: ["m03-live"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: m03-live-proof
+      args:
+        <<: *registry-build-args
+        NODE_VERSION: ${GGCS_NODE_VERSION:-22.23.2}
+        PNPM_VERSION: ${GGCS_PNPM_VERSION:-10.34.5}
+    environment:
+      GGCS_M03_PROXY_DATA_PORT: "9091"
+      GGCS_M03_PROXY_CONTROL_PORT: "9092"
+      GGCS_M03_PROXY_UPSTREAM_HOST: m03-live-rosbridge
+      GGCS_M03_PROXY_UPSTREAM_PORT: "9090"
+    depends_on:
+      m03-live-rosbridge:
+        condition: service_started
+    command: ["pnpm", "run", "example:m03:proxy"]
+
+  m03-live-shadow-proof:
+    profiles: ["m03-live"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: m03-live-proof
+      args:
+        <<: *registry-build-args
+        NODE_VERSION: ${GGCS_NODE_VERSION:-22.23.2}
+        PNPM_VERSION: ${GGCS_PNPM_VERSION:-10.34.5}
+    environment:
+      GGCS_M03_SHADOW_URL: ws://m03-link-proxy:9091
+      GGCS_M03_PROXY_CONTROL_HOST: m03-link-proxy
+      GGCS_M03_PROXY_CONTROL_PORT: "9092"
+      GGCS_M03_LIVE_TIMEOUT_MS: ${GGCS_M03_LIVE_TIMEOUT_MS:-30000}
+    depends_on:
+      m03-live-rosbridge:
+        condition: service_started
+      m03-live-fixture:
+        condition: service_started
+      m03-link-proxy:
+        condition: service_started
+    command: ["pnpm", "run", "example:m03:live"]

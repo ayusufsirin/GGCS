@@ -6,6 +6,7 @@ const transformsDir = path.join(root, "packages", "transforms");
 const rosStdMsgsDir = path.join(root, "packages", "ros-std-msgs");
 const arnavDir = path.join(root, "plugins", "arnav");
 const shadowDir = path.join(root, "apps", "examples", "sensor-suite-shadow-headless");
+const liveProofDir = path.join(root, "apps", "examples", "sensor-suite-shadow-live-proof");
 const violations = [];
 
 function readPackage(directory) {
@@ -52,6 +53,18 @@ requireAllowedDependencies(
     "@ggcs/transport-rosbridge",
   ]),
 );
+requireAllowedDependencies(
+  "sensor-suite-shadow-live-proof",
+  liveProofDir,
+  new Set([
+    "@ggcs/core",
+    "@ggcs/ros",
+    "@ggcs/ros-std-msgs",
+    "@ggcs/schema",
+    "@ggcs/transport-rosbridge",
+    "roslib",
+  ]),
+);
 
 function walk(directory) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -92,6 +105,34 @@ scan(shadowDir, {
   forbiddenImports: uiImports,
   forbiddenTokens: ["window.", "document.", "navigator.", "localStorage", "../src/middleware", "../src/config"],
 });
+scan(liveProofDir, {
+  forbiddenImports: uiImports,
+  forbiddenTokens: [
+    "window.",
+    "document.",
+    "navigator.",
+    "localStorage",
+    "../src/middleware",
+    "../src/config",
+    "/rosapi/set_param",
+    ".write(",
+  ],
+});
+
+for (const file of walk(path.join(liveProofDir, "src")).filter((value) => value.endsWith(".ts"))) {
+  const source = fs.readFileSync(file, "utf8");
+  const relative = path.relative(root, file);
+  if (source.includes('from "roslib"') && !relative.endsWith("legacy-reference.ts")) {
+    violations.push(`${relative} imports roslib outside the integration-only legacy reference module`);
+  }
+}
+
+const liveDefinitionSource = fs.readFileSync(path.join(liveProofDir, "src", "definition.ts"), "utf8");
+for (const sideEffectProvider of ["topicCommand", "serviceProcedure"]) {
+  if (liveDefinitionSource.includes(`ROSBRIDGE_PROVIDER_IDS.${sideEffectProvider}`)) {
+    violations.push(`live proof definition references forbidden side-effect provider ${sideEffectProvider}`);
+  }
+}
 
 const definitionSource = fs.readFileSync(path.join(shadowDir, "src", "definition.ts"), "utf8");
 for (const sideEffectProvider of ["topicCommand", "serviceProcedure", "parameterProvider"]) {

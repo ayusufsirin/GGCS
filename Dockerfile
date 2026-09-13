@@ -80,3 +80,7 @@ CMD ["pnpm", "run", "example:m02"]
 
 FROM workspace AS m03-verify
 CMD ["pnpm", "run", "verify:m03"]
+
+FROM workspace AS m03-live-proof
+RUN pnpm run build:m03
+CMD ["pnpm", "run", "example:m03:live"]

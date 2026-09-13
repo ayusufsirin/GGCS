@@ -197,6 +197,16 @@ try {
   const cycles: Array<Readonly<Record<string, unknown>>> = [];
 
   for (let cycle = 1; cycle <= 3; cycle += 1) {
+    const preCutValues = Object.fromEntries(
+      resourceIds.map((id) => {
+        const observation = sources.get(id)!.current();
+        if (observation.state !== "fresh") {
+          throw new Error(`${id} must be fresh before reconnect cycle ${cycle}`);
+        }
+        return [id, observation.value];
+      }),
+    ) as Record<ResourceId, number>;
+
     stage = `outage-${cycle}`;
     await proxy.cut();
     await waitUntil(`GGCS reconnecting state in cycle ${cycle}`, () =>
@@ -207,7 +217,7 @@ try {
 
     const outageConnection = connection.current();
     const outageSources = Object.fromEntries(
-      resourceIds.map((id) => [id, sources.get(id)!.current().state]),
+      resourceIds.map((id) => [id, sources.get(id)!.current()]),
     );
     await delay(500);
 
@@ -216,6 +226,20 @@ try {
     await waitUntil(`GGCS reconnect in cycle ${cycle}`, () => connection.current().state === "connected");
     await waitUntil(`legacy reconnect in cycle ${cycle}`, () => legacy.isConnected());
     await waitUntil(`all GGCS semantic sources fresh in cycle ${cycle}`, () => allSourcesState("fresh"));
+    const recoveryValues = Object.fromEntries(
+      resourceIds.map((id) => {
+        const observation = sources.get(id)!.current();
+        if (observation.state !== "fresh") {
+          throw new Error(`${id} did not recover to fresh in cycle ${cycle}`);
+        }
+        if (observation.value <= preCutValues[id]) {
+          throw new Error(
+            `${id} did not receive a new monotonic sample after reconnect ${cycle}: before=${preCutValues[id]}, after=${observation.value}`,
+          );
+        }
+        return [id, observation.value];
+      }),
+    ) as Record<ResourceId, number>;
     await waitForMatches(stage, 3);
 
     const cycleReports = Object.fromEntries(
@@ -235,6 +259,8 @@ try {
       cycle,
       outageConnection,
       outageSources,
+      preCutValues,
+      recoveryValues,
       recoveryConnection: connection.current(),
       reports: cycleReports,
       parameter: parameterCheck,
@@ -258,6 +284,17 @@ try {
     }),
   ) as Record<ResourceId, WindowReport>;
   const memoryFinal = snapshotMemory();
+  const memoryDelta = {
+    rss: memoryFinal.rss - memoryBaseline.rss,
+    heapUsed: memoryFinal.heapUsed - memoryBaseline.heapUsed,
+  };
+  // Diagnostic guard only: deliberately generous so normal GC/JIT variance is
+  // not treated as an API guarantee while still rejecting obvious runaway growth.
+  if (memoryDelta.heapUsed > 128 * 1024 * 1024 || memoryDelta.rss > 256 * 1024 * 1024) {
+    throw new Error(
+      `Live proof memory growth is unexpectedly large: rssDelta=${memoryDelta.rss}, heapDelta=${memoryDelta.heapUsed}`,
+    );
+  }
 
   platform.console?.log(
     JSON.stringify(
@@ -299,10 +336,7 @@ try {
         memory: {
           baseline: memoryBaseline,
           final: memoryFinal,
-          delta: {
-            rss: memoryFinal.rss - memoryBaseline.rss,
-            heapUsed: memoryFinal.heapUsed - memoryBaseline.heapUsed,
-          },
+          delta: memoryDelta,
         },
       },
       null,
