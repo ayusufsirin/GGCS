@@ -315,3 +315,35 @@ services:
       m03-link-proxy:
         condition: service_started
     command: ["pnpm", "run", "example:m03:live"]
+
+  # M03 Slice 04 production/on-target closure proof. This service connects to
+  # an already running real Sensor Suite rosbridge endpoint; it never starts a
+  # synthetic ArNav interface or production control fixture.
+  m03-on-target-proof:
+    profiles: ["m03-on-target"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: m03-on-target-proof
+      args:
+        <<: *registry-build-args
+        NODE_VERSION: ${GGCS_NODE_VERSION:-22.23.2}
+        PNPM_VERSION: ${GGCS_PNPM_VERSION:-10.34.5}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      GGCS_ROSBRIDGE_URL: ${GGCS_M03_ON_TARGET_ROSBRIDGE_URL:-ws://host.docker.internal:9090}
+      GGCS_M03_ON_TARGET_STARTUP_TIMEOUT_MS: ${GGCS_M03_ON_TARGET_STARTUP_TIMEOUT_MS:-30000}
+      GGCS_M03_ON_TARGET_TIMEOUT_MS: ${GGCS_M03_ON_TARGET_TIMEOUT_MS:-1800000}
+      GGCS_M03_ON_TARGET_MIN_DURATION_MS: ${GGCS_M03_ON_TARGET_MIN_DURATION_MS:-600000}
+      GGCS_M03_ON_TARGET_MIN_HIGH_RATE_MATCHES: ${GGCS_M03_ON_TARGET_MIN_HIGH_RATE_MATCHES:-1000}
+      GGCS_M03_ON_TARGET_MIN_LOW_RATE_MATCHES: ${GGCS_M03_ON_TARGET_MIN_LOW_RATE_MATCHES:-20}
+      GGCS_M03_ON_TARGET_MAX_SKEW_MS: ${GGCS_M03_ON_TARGET_MAX_SKEW_MS:-100}
+      GGCS_M03_ON_TARGET_PARAMETER_TIMEOUT_MS: ${GGCS_M03_ON_TARGET_PARAMETER_TIMEOUT_MS:-15000}
+      GGCS_M03_ON_TARGET_PARAMETER_IDS: ${GGCS_M03_ON_TARGET_PARAMETER_IDS:-}
+      GGCS_M03_ON_TARGET_PARAMETER_DISPOSITION: ${GGCS_M03_ON_TARGET_PARAMETER_DISPOSITION:-}
+      GGCS_M03_ON_TARGET_CAMERA_MODE: ${GGCS_M03_ON_TARGET_CAMERA_MODE:-off}
+      GGCS_M03_ON_TARGET_CAMERA_DISPOSITION: ${GGCS_M03_ON_TARGET_CAMERA_DISPOSITION:-}
+      GGCS_M03_ON_TARGET_CAMERA_MIN_SAMPLES: ${GGCS_M03_ON_TARGET_CAMERA_MIN_SAMPLES:-20}
+      GGCS_M03_ON_TARGET_LEGACY_UI_OBSERVATION: ${GGCS_M03_ON_TARGET_LEGACY_UI_OBSERVATION:-}
+    command: ["pnpm", "run", "example:m03:on-target"]
