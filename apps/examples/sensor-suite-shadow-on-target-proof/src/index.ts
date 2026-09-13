@@ -11,9 +11,10 @@ import {
   SENSOR_SUITE_RESOURCE_IDS,
   SENSOR_SUITE_SATELLITES_TOPIC,
   SENSOR_SUITE_SPEED_TOPIC,
+  SENSOR_SUITE_ZED_RGB_TOPIC,
   compileSensorSuiteShadowApplication,
 } from "@ggcs/example-sensor-suite-shadow-headless/definition";
-import { parseRosParameterAddress } from "@ggcs/ros";
+import { parseRosParameterAddress, type RosMessage } from "@ggcs/ros";
 import {
   LegacyOnTargetObserver,
   type OnTargetSemanticResourceId,
@@ -23,13 +24,18 @@ import {
   BoundedSkewPairingRecorder,
   type PairingReport,
 } from "./pairing.js";
+import { CameraEvidenceRecorder, assertCameraParity } from "./camera-evidence.js";
 import {
   SubscriptionDiagnostics,
   createDiagnosticClientFactory,
 } from "./subscription-diagnostics.js";
 
 const platform = globalThis as unknown as {
-  readonly process: { readonly env: Readonly<Record<string, string | undefined>> };
+  readonly process: {
+    readonly env: Readonly<Record<string, string | undefined>>;
+    memoryUsage(): { readonly rss: number; readonly heapUsed: number };
+    cpuUsage(previousValue?: { readonly user: number; readonly system: number }): { readonly user: number; readonly system: number };
+  };
   readonly console?: { log(...args: unknown[]): void };
 };
 
@@ -46,6 +52,23 @@ const parameterIds = (platform.process.env.GGCS_M03_ON_TARGET_PARAMETER_IDS ?? "
   .map((value) => value.trim())
   .filter((value) => value.length > 0);
 const parameterDisposition = (platform.process.env.GGCS_M03_ON_TARGET_PARAMETER_DISPOSITION ?? "").trim();
+
+const cameraMode = (platform.process.env.GGCS_M03_ON_TARGET_CAMERA_MODE ?? "off").trim();
+const cameraDisposition = (platform.process.env.GGCS_M03_ON_TARGET_CAMERA_DISPOSITION ?? "").trim();
+const cameraMinimumSamples = Number(platform.process.env.GGCS_M03_ON_TARGET_CAMERA_MIN_SAMPLES ?? "20");
+const legacyUiObservation = (platform.process.env.GGCS_M03_ON_TARGET_LEGACY_UI_OBSERVATION ?? "").trim();
+const observeCamera = cameraMode === "observe";
+
+if (!observeCamera && cameraDisposition.length === 0) {
+  throw new Error(
+    "Slice 04 requires explicit camera disposition when camera observation is disabled: set GGCS_M03_ON_TARGET_CAMERA_DISPOSITION",
+  );
+}
+if (legacyUiObservation.length === 0) {
+  throw new Error(
+    "Slice 04 requires an explicit operator observation for legacy UI usability: set GGCS_M03_ON_TARGET_LEGACY_UI_OBSERVATION",
+  );
+}
 
 if (parameterIds.length === 0 && parameterDisposition.length === 0) {
   throw new Error(
@@ -116,6 +139,7 @@ function assertSinglePhysicalSubscriptions(snapshot: Readonly<Record<string, { r
   for (const topic of [
     SENSOR_SUITE_ARNAV_TOPIC,
     SENSOR_SUITE_SPEED_TOPIC,
+  SENSOR_SUITE_ZED_RGB_TOPIC,
     SENSOR_SUITE_ACCELERATION_TOPIC,
     SENSOR_SUITE_SATELLITES_TOPIC,
   ]) {
@@ -127,9 +151,12 @@ function assertSinglePhysicalSubscriptions(snapshot: Readonly<Record<string, { r
   }
 }
 
+const cameraLegacy = new CameraEvidenceRecorder();
+const cameraGgcs = new CameraEvidenceRecorder();
 const subscriptionDiagnostics = new SubscriptionDiagnostics();
 const compiled = compileSensorSuiteShadowApplication({
   rosbridgeUrl: endpoint,
+  includeCamera: observeCamera,
   transport: { clientFactory: createDiagnosticClientFactory(subscriptionDiagnostics) },
 });
 const runtime = compiled.createRuntime();
@@ -146,11 +173,25 @@ for (const spec of specs) {
   }));
 }
 
+let cameraGgcsFresh = !observeCamera;
+if (observeCamera) {
+  const cameraSource = runtime.resource<Source<RosMessage>>(SENSOR_SUITE_RESOURCE_IDS.cameraZedRgbRaw);
+  subscriptions.push(cameraSource.subscribe((observation) => {
+    if (observation.state !== "fresh") return;
+    const data = observation.value.data;
+    if (typeof data !== "string") throw new Error("GGCS ZED compressed image data must be a base64 string");
+    cameraGgcsFresh = true;
+    cameraGgcs.record(data.length, Date.now());
+  }));
+}
+
 const legacyStates: string[] = [];
 const legacy = new LegacyOnTargetObserver({
   url: endpoint,
   onConnectionState(state) { legacyStates.push(state); },
   onSample(resourceId, value, at) { recorders.get(resourceId)!.recordLegacy(value, at); },
+  includeCamera: observeCamera,
+  onCameraSample(payloadLength, at) { cameraLegacy.record(payloadLength, at); },
 });
 legacy.start();
 const parameterProvider = runtime.resource<ParameterProvider>(SENSOR_SUITE_RESOURCE_IDS.parameters);
@@ -185,11 +226,22 @@ try {
     () => specs.every((spec) => currentStates.get(spec.id) === "fresh" && recorders.get(spec.id)!.report().legacySamples > 0),
     startupTimeoutMs,
   );
+  if (observeCamera) {
+    await waitUntil(
+      "camera observations on both paths",
+      () => cameraGgcsFresh && cameraLegacy.summary().samples > 0,
+      startupTimeoutMs,
+    );
+  }
   const subscriptionBaseline = subscriptionDiagnostics.snapshot();
   assertSinglePhysicalSubscriptions(subscriptionBaseline);
   const parameterBaseline = await checkParameters("baseline");
 
   for (const recorder of recorders.values()) recorder.reset();
+  cameraLegacy.reset();
+  cameraGgcs.reset();
+  const memoryBaseline = platform.process.memoryUsage();
+  const cpuBaseline = platform.process.cpuUsage();
   const evidenceStartedAt = Date.now();
   const deadline = evidenceStartedAt + runTimeoutMs;
   while (true) {
@@ -209,6 +261,22 @@ try {
   const parameterFinal = await checkParameters("final");
   const subscriptionFinal = subscriptionDiagnostics.snapshot();
   assertSinglePhysicalSubscriptions(subscriptionFinal);
+  const cameraLegacySummary = cameraLegacy.summary();
+  const cameraGgcsSummary = cameraGgcs.summary();
+  if (observeCamera) assertCameraParity(cameraLegacySummary, cameraGgcsSummary, cameraMinimumSamples);
+  const memoryFinal = platform.process.memoryUsage();
+  const cpuDelta = platform.process.cpuUsage(cpuBaseline);
+  const durationMs = Date.now() - evidenceStartedAt;
+  const memoryDelta = {
+    rss: memoryFinal.rss - memoryBaseline.rss,
+    heapUsed: memoryFinal.heapUsed - memoryBaseline.heapUsed,
+  };
+  if (memoryDelta.heapUsed > 256 * 1024 * 1024 || memoryDelta.rss > 512 * 1024 * 1024) {
+    throw new Error(`On-target shadow memory growth is unexpectedly large: ${JSON.stringify(memoryDelta)}`);
+  }
+  const cpuCorePercent = durationMs > 0
+    ? ((cpuDelta.user + cpuDelta.system) / 1000) / durationMs * 100
+    : null;
 
   platform.console?.log(JSON.stringify({
     mode: "m03-on-target-production-parity",
@@ -216,7 +284,7 @@ try {
     evidence: {
       startedAt: evidenceStartedAt,
       finishedAt: Date.now(),
-      durationMs: Date.now() - evidenceStartedAt,
+      durationMs,
       requiredMinimumDurationMs: minimumDurationMs,
       requiredHighRateMatches: minimumHighRateMatches,
       requiredLowRateMatches: minimumLowRateMatches,
@@ -238,6 +306,24 @@ try {
       baseline: subscriptionBaseline,
       final: subscriptionFinal,
     },
+    performance: {
+      shadowAdditionalWebSocketsBesideLegacyUi: 1,
+      proofWebSockets: 2,
+      memory: { baseline: memoryBaseline, final: memoryFinal, delta: memoryDelta },
+      cpu: { userMicros: cpuDelta.user, systemMicros: cpuDelta.system, approximateSingleCorePercent: cpuCorePercent },
+      shadowTopicSubscriptions: subscriptionFinal,
+      telemetryEventsObserved: Object.values(finalReports).reduce((sum, report) => sum + report.ggcsSamples, 0),
+      legacyUiObservation,
+    },
+    camera: observeCamera
+      ? {
+          mode: "observe",
+          topic: SENSOR_SUITE_ZED_RGB_TOPIC,
+          minimumSamples: cameraMinimumSamples,
+          legacy: cameraLegacySummary,
+          ggcs: cameraGgcsSummary,
+        }
+      : { mode: "disabled", disposition: cameraDisposition },
     productionInterfacePolicy: {
       arnavMessageType: "ardiclabs_arnav_msgs/msg/Ins",
       fabricatedInterface: false,

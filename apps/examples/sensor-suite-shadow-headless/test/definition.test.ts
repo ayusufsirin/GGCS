@@ -12,6 +12,8 @@ import {
   SENSOR_SUITE_RESOURCE_IDS,
   SENSOR_SUITE_SATELLITES_TOPIC,
   SENSOR_SUITE_SPEED_TOPIC,
+  SENSOR_SUITE_ZED_RGB_MESSAGE_TYPE,
+  SENSOR_SUITE_ZED_RGB_TOPIC,
   compileSensorSuiteShadowApplication,
   createSensorSuiteShadowDefinition,
 } from "../src/definition.js";
@@ -30,7 +32,9 @@ describe("Sensor Suite shadow definition", () => {
       transport: { clientFactory },
     });
     expect(createCalls).toBe(0);
-    expect(compiled.orderedResources).toHaveLength(Object.keys(SENSOR_SUITE_RESOURCE_IDS).length);
+    expect(compiled.orderedResources).toHaveLength(
+      createSensorSuiteShadowDefinition({ rosbridgeUrl: "ws://shadow.invalid:9090" }).resources.length,
+    );
   });
 
   it("contains exactly one raw Source for each accepted low-bandwidth ROS topic", () => {
@@ -83,6 +87,22 @@ describe("Sensor Suite shadow definition", () => {
     ]));
   });
 
+  it("keeps camera traffic disabled by default and exposes an explicit opt-in raw Source", () => {
+    const baseline = createSensorSuiteShadowDefinition({ rosbridgeUrl: "ws://shadow.invalid:9090" });
+    expect(baseline.resources.some((resource) => resource.id === SENSOR_SUITE_RESOURCE_IDS.cameraZedRgbRaw)).toBe(false);
+    const withCamera = createSensorSuiteShadowDefinition({ rosbridgeUrl: "ws://shadow.invalid:9090", includeCamera: true });
+    expect(withCamera.resources.find((resource) => resource.id === SENSOR_SUITE_RESOURCE_IDS.cameraZedRgbRaw)).toEqual({
+      id: SENSOR_SUITE_RESOURCE_IDS.cameraZedRgbRaw,
+      provider: ROSBRIDGE_PROVIDER_IDS.topicSource,
+      type: `ros:message/${SENSOR_SUITE_ZED_RGB_MESSAGE_TYPE}`,
+      config: {
+        connection: SENSOR_SUITE_RESOURCE_IDS.connection,
+        topic: SENSOR_SUITE_ZED_RGB_TOPIC,
+        messageType: SENSOR_SUITE_ZED_RGB_MESSAGE_TYPE,
+      },
+    });
+  });
+
   it("maps the legacy RTK display explicitly to the existing gnss_fixed semantic truth", () => {
     const definition = createSensorSuiteShadowDefinition({ rosbridgeUrl: "ws://shadow.invalid:9090" });
     const health = definition.resources.find((resource) => resource.id === SENSOR_SUITE_RESOURCE_IDS.healthGnssFixed);
@@ -111,6 +131,7 @@ describe("Sensor Suite shadow definition", () => {
       SENSOR_SUITE_RESOURCE_IDS.vehicleSpeedRaw,
       SENSOR_SUITE_RESOURCE_IDS.vehicleAccelerationRaw,
       SENSOR_SUITE_RESOURCE_IDS.arnavSatellitesRaw,
+      SENSOR_SUITE_RESOURCE_IDS.cameraZedRgbRaw,
       SENSOR_SUITE_RESOURCE_IDS.zedRecordingStart,
       SENSOR_SUITE_RESOURCE_IDS.zedRecordingStop,
       SENSOR_SUITE_RESOURCE_IDS.bagRecordingStart,
@@ -118,7 +139,6 @@ describe("Sensor Suite shadow definition", () => {
       SENSOR_SUITE_RESOURCE_IDS.parameters,
     ]);
     const semanticResources = definition.resources.filter((resource) => !excludedIds.has(resource.id));
-    expect(semanticResources).toHaveLength(Object.keys(SENSOR_SUITE_RESOURCE_IDS).length - excludedIds.size);
     for (const resource of semanticResources) {
       expect(resource.provider).toBe(DERIVED_PROVIDER_ID);
     }

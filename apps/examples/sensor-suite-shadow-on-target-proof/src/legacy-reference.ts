@@ -5,6 +5,8 @@ import {
   SENSOR_SUITE_RESOURCE_IDS,
   SENSOR_SUITE_SATELLITES_TOPIC,
   SENSOR_SUITE_SPEED_TOPIC,
+  SENSOR_SUITE_ZED_RGB_MESSAGE_TYPE,
+  SENSOR_SUITE_ZED_RGB_TOPIC,
 } from "@ggcs/example-sensor-suite-shadow-headless/definition";
 import { ARNAV_INS_MESSAGE_TYPE } from "@ggcs/arnav";
 
@@ -33,6 +35,8 @@ export interface LegacyOnTargetObserverOptions {
   readonly reconnectDelayMs?: number;
   onSample(resourceId: OnTargetSemanticResourceId, value: OnTargetSemanticValue, at: number): void;
   onConnectionState?(state: "disconnected" | "connecting" | "connected"): void;
+  readonly includeCamera?: boolean;
+  onCameraSample?(payloadLength: number, at: number): void;
 }
 
 function record(value: unknown, context: string): Readonly<Record<string, unknown>> {
@@ -85,6 +89,7 @@ export class LegacyOnTargetObserver {
       this.numericTopic(SENSOR_SUITE_ACCELERATION_TOPIC, "std_msgs/msg/Float64", SENSOR_SUITE_RESOURCE_IDS.vehicleAcceleration),
       this.numericTopic(SENSOR_SUITE_SATELLITES_TOPIC, "std_msgs/msg/Int64", SENSOR_SUITE_RESOURCE_IDS.arnavSatellites),
     );
+    if (options.includeCamera === true) this.topics.push(this.cameraTopic());
     this.ros.on("connection", () => {
       this.connected = true;
       this.options.onConnectionState?.("connected");
@@ -216,6 +221,20 @@ export class LegacyOnTargetObserver {
       const gnssFixed = statusBoolean(value, "gnss_fixed");
       this.emit(SENSOR_SUITE_RESOURCE_IDS.healthGnssFixed, gnssFixed, at);
       this.emit(SENSOR_SUITE_RESOURCE_IDS.rtkFixedLegacy, gnssFixed, at);
+    });
+    return topic;
+  }
+
+  private cameraTopic(): ROSLIB.Topic {
+    const topic = new ROSLIB.Topic({
+      ros: this.ros,
+      name: SENSOR_SUITE_ZED_RGB_TOPIC,
+      messageType: SENSOR_SUITE_ZED_RGB_MESSAGE_TYPE,
+    });
+    topic.subscribe((message: unknown) => {
+      const data = record(message, "Legacy ZED compressed image message").data;
+      if (typeof data !== "string") throw new Error("Legacy ZED compressed image data must be a base64 string");
+      this.options.onCameraSample?.(data.length, Date.now());
     });
     return topic;
   }

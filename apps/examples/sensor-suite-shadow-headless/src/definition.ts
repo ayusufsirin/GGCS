@@ -45,6 +45,8 @@ export const SENSOR_SUITE_ARNAV_TOPIC = "/ArdicLabs/Arnav/Gnss_Ins_data" as cons
 export const SENSOR_SUITE_SPEED_TOPIC = "/speed" as const;
 export const SENSOR_SUITE_ACCELERATION_TOPIC = "/accel" as const;
 export const SENSOR_SUITE_SATELLITES_TOPIC = "/arnav/satellites" as const;
+export const SENSOR_SUITE_ZED_RGB_TOPIC = "/zed/zed_node/rgb/color/rect/image/compressed" as const;
+export const SENSOR_SUITE_ZED_RGB_MESSAGE_TYPE = "sensor_msgs/msg/CompressedImage" as const;
 
 export const SENSOR_SUITE_RECORDING_SERVICES = {
   zedStart: "/zed/zed_node/start_svo_rec",
@@ -64,6 +66,7 @@ export const SENSOR_SUITE_RESOURCE_IDS = {
   vehicleSpeedRaw: "vehicle.speed.raw",
   vehicleAccelerationRaw: "vehicle.acceleration.raw",
   arnavSatellitesRaw: "arnav.satellites.raw",
+  cameraZedRgbRaw: "camera.zed.rgb.raw",
   arnavRollRad: "arnav.roll.rad",
   arnavPitchRad: "arnav.pitch.rad",
   arnavYawRad: "arnav.yaw.rad",
@@ -186,6 +189,7 @@ function serviceProcedure(options: {
 
 export function createSensorSuiteShadowDefinition(options: {
   readonly rosbridgeUrl: string;
+  readonly includeCamera?: boolean;
 }): ApplicationDefinition {
   const ids = SENSOR_SUITE_RESOURCE_IDS;
   return {
@@ -236,6 +240,14 @@ export function createSensorSuiteShadowDefinition(options: {
         topic: SENSOR_SUITE_SATELLITES_TOPIC,
         messageType: ROS_STD_MESSAGE_TYPES.int64,
       }),
+      ...(options.includeCamera === true
+        ? [topicSource({
+            id: ids.cameraZedRgbRaw,
+            type: `ros:message/${SENSOR_SUITE_ZED_RGB_MESSAGE_TYPE}`,
+            topic: SENSOR_SUITE_ZED_RGB_TOPIC,
+            messageType: SENSOR_SUITE_ZED_RGB_MESSAGE_TYPE,
+          })]
+        : []),
       ...createArnavSemanticResources(ids.arnavInsRaw),
       ...createNumericSemanticResources({
         speedRawSourceId: ids.vehicleSpeedRaw,
@@ -288,6 +300,7 @@ export function createSensorSuiteShadowRegistry(
         ARNAV_INS_MESSAGE_TYPE,
         ROS_STD_MESSAGE_TYPES.float64,
         ROS_STD_MESSAGE_TYPES.int64,
+        SENSOR_SUITE_ZED_RGB_MESSAGE_TYPE,
       ],
       serviceTypes: [
         SENSOR_SUITE_RECORDING_SERVICE_TYPES.zedStart,
@@ -302,10 +315,14 @@ export function createSensorSuiteShadowRegistry(
 
 export function compileSensorSuiteShadowApplication(options: {
   readonly rosbridgeUrl: string;
+  readonly includeCamera?: boolean;
   readonly transport?: RosbridgeTransportPluginOptions;
 }): CompiledRuntimeDefinition {
   return compileApplication(
-    createSensorSuiteShadowDefinition({ rosbridgeUrl: options.rosbridgeUrl }),
+    createSensorSuiteShadowDefinition({
+      rosbridgeUrl: options.rosbridgeUrl,
+      ...(options.includeCamera !== undefined ? { includeCamera: options.includeCamera } : {}),
+    }),
     createSensorSuiteShadowRegistry(options.transport),
   );
 }
