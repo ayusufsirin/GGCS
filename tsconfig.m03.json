@@ -16,6 +16,7 @@
     { "path": "./apps/examples/rosbridge-command-headless" },
     { "path": "./apps/examples/rosbridge-service-headless" },
     { "path": "./apps/examples/rosbridge-parameter-headless" },
-    { "path": "./apps/examples/sensor-suite-shadow-headless" }
+    { "path": "./apps/examples/sensor-suite-shadow-headless" },
+    { "path": "./apps/examples/sensor-suite-shadow-live-proof" }
   ]
 }

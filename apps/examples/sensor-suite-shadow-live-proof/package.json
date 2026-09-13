@@ -1,0 +1,23 @@
+{
+  "name": "@ggcs/example-sensor-suite-shadow-live-proof",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@ggcs/core": "workspace:*",
+    "@ggcs/ros": "workspace:*",
+    "@ggcs/ros-std-msgs": "workspace:*",
+    "@ggcs/schema": "workspace:*",
+    "@ggcs/transport-rosbridge": "workspace:*",
+    "roslib": "1.4.1"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "start": "node dist/index.js"
+  },
+  "devDependencies": {
+    "@types/node": "^16.18.126",
+    "@types/roslib": "1.3.5",
+    "typescript": "5.8.3"
+  }
+}
