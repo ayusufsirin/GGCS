@@ -5,6 +5,7 @@ import {
   TRANSFORMS_PLUGIN_ID,
   angleRadToDeg,
   createTransformsPlugin,
+  quaternionToEulerComputation,
   radToDeg,
 } from "../src/index.js";
 
@@ -25,6 +26,6 @@ describe("angle.radToDeg", () => {
   it("is exported by the renderer/transport-neutral transforms plugin", () => {
     const plugin = createTransformsPlugin();
     expect(plugin.manifest.id).toBe(TRANSFORMS_PLUGIN_ID);
-    expect(plugin.computations).toEqual([angleRadToDeg]);
+    expect(plugin.computations).toEqual([angleRadToDeg, quaternionToEulerComputation]);
   });
 });
