@@ -38,6 +38,9 @@
       ],
       "@ggcs/arnav": [
         "plugins/arnav/src/index.ts"
+      ],
+      "@ggcs/ros-std-msgs": [
+        "packages/ros-std-msgs/src/index.ts"
       ]
     },
     "lib": [

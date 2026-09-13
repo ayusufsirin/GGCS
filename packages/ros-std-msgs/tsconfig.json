@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "tsBuildInfoFile": "./tsconfig.tsbuildinfo"
+  },
+  "references": [
+    { "path": "../schema" },
+    { "path": "../ros" },
+    { "path": "../plugin-sdk" }
+  ],
+  "include": ["src/**/*.ts"]
+}

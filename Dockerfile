@@ -34,6 +34,7 @@ COPY package.json pnpm-workspace.yaml ./
 COPY packages/core/package.json packages/core/package.json
 COPY packages/plugin-sdk/package.json packages/plugin-sdk/package.json
 COPY packages/ros/package.json packages/ros/package.json
+COPY packages/ros-std-msgs/package.json packages/ros-std-msgs/package.json
 COPY packages/schema/package.json packages/schema/package.json
 COPY packages/testing/package.json packages/testing/package.json
 COPY packages/transforms/package.json packages/transforms/package.json

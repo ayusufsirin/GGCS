@@ -3,6 +3,7 @@
   "references": [
     { "path": "./packages/schema" },
     { "path": "./packages/ros" },
+    { "path": "./packages/ros-std-msgs" },
     { "path": "./packages/core" },
     { "path": "./packages/plugin-sdk" },
     { "path": "./packages/testing" },
