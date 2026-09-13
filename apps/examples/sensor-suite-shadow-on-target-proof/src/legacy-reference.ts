@@ -120,6 +120,75 @@ export class LegacyOnTargetObserver {
     return this.connected;
   }
 
+  async listNodes(timeoutMs: number): Promise<readonly string[]> {
+    const response = await this.callService(
+      "/rosapi/nodes",
+      "rosapi_msgs/srv/Nodes",
+      {},
+      timeoutMs,
+    );
+    const nodes = response.nodes;
+    if (!Array.isArray(nodes) || !nodes.every((value) => typeof value === "string")) {
+      throw new Error("Legacy on-target /rosapi/nodes returned an invalid nodes array");
+    }
+    return nodes as string[];
+  }
+
+  async getParameter(name: string, timeoutMs: number): Promise<string> {
+    const response = await this.callService(
+      "/rosapi/get_param",
+      "rosapi_msgs/srv/GetParam",
+      { name, default_value: "" },
+      timeoutMs,
+    );
+    if (typeof response.value !== "string") {
+      throw new Error("Legacy on-target /rosapi/get_param returned a non-string value");
+    }
+    return response.value;
+  }
+
+  private callService(
+    name: string,
+    serviceType: string,
+    request: Readonly<Record<string, unknown>>,
+    timeoutMs: number,
+  ): Promise<Readonly<Record<string, unknown>>> {
+    if (!this.connected) {
+      return Promise.reject(new Error(`Legacy on-target service ${name} requires a connected ROSBridge`));
+    }
+    const service = new ROSLIB.Service({ ros: this.ros, name, serviceType });
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        reject(new Error(`Legacy on-target service ${name} timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+      try {
+        service.callService(
+          new ROSLIB.ServiceRequest(request),
+          (value: unknown) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            resolve(record(value, `Legacy on-target service ${name} response`));
+          },
+          (error: string) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            reject(new Error(`Legacy on-target service ${name} failed: ${error}`));
+          },
+        );
+      } catch (error) {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(error);
+      }
+    });
+  }
+
   private emit(resourceId: OnTargetSemanticResourceId, value: OnTargetSemanticValue, at: number): void {
     this.options.onSample(resourceId, value, at);
   }

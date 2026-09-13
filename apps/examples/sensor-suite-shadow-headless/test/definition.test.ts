@@ -115,6 +115,7 @@ describe("Sensor Suite shadow definition", () => {
       SENSOR_SUITE_RESOURCE_IDS.zedRecordingStop,
       SENSOR_SUITE_RESOURCE_IDS.bagRecordingStart,
       SENSOR_SUITE_RESOURCE_IDS.bagRecordingStop,
+      SENSOR_SUITE_RESOURCE_IDS.parameters,
     ]);
     const semanticResources = definition.resources.filter((resource) => !excludedIds.has(resource.id));
     expect(semanticResources).toHaveLength(Object.keys(SENSOR_SUITE_RESOURCE_IDS).length - excludedIds.size);
@@ -173,12 +174,14 @@ describe("Sensor Suite shadow definition", () => {
     ]));
   });
 
-  it("contains no production shadow Command or parameter provider yet", () => {
+  it("contains a read-only-use ParameterProvider definition and no production shadow Command", () => {
     const definition = createSensorSuiteShadowDefinition({ rosbridgeUrl: "ws://shadow.invalid:9090" });
-    const forbiddenProviders = new Set([
-      ROSBRIDGE_PROVIDER_IDS.topicCommand,
-      ROSBRIDGE_PROVIDER_IDS.parameterProvider,
-    ]);
-    expect(definition.resources.some((resource) => forbiddenProviders.has(resource.provider as never))).toBe(false);
+    expect(definition.resources.some((resource) => resource.provider === ROSBRIDGE_PROVIDER_IDS.topicCommand)).toBe(false);
+    expect(definition.resources.find((resource) => resource.id === SENSOR_SUITE_RESOURCE_IDS.parameters)).toEqual({
+      id: SENSOR_SUITE_RESOURCE_IDS.parameters,
+      provider: ROSBRIDGE_PROVIDER_IDS.parameterProvider,
+      type: "ggcs:type/object",
+      config: { connection: SENSOR_SUITE_RESOURCE_IDS.connection, timeoutMs: 15_000 },
+    });
   });
 });

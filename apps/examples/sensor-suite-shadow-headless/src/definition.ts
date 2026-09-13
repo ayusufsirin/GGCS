@@ -89,6 +89,7 @@ export const SENSOR_SUITE_RESOURCE_IDS = {
   zedRecordingStop: "zed.recording.stop",
   bagRecordingStart: "bag.recording.start",
   bagRecordingStop: "bag.recording.stop",
+  parameters: "shadow.parameters",
 } as const;
 
 function derived(
@@ -265,6 +266,15 @@ export function createSensorSuiteShadowDefinition(options: {
         service: SENSOR_SUITE_RECORDING_SERVICES.bagStop,
         serviceType: SENSOR_SUITE_RECORDING_SERVICE_TYPES.trigger,
       }),
+      {
+        id: ids.parameters,
+        provider: ROSBRIDGE_PROVIDER_IDS.parameterProvider,
+        type: CORE_TYPE_IDS.object,
+        config: {
+          connection: ids.connection,
+          timeoutMs: 15_000,
+        },
+      },
     ],
   };
 }
