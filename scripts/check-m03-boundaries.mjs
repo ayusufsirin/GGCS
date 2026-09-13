@@ -7,6 +7,7 @@ const rosStdMsgsDir = path.join(root, "packages", "ros-std-msgs");
 const arnavDir = path.join(root, "plugins", "arnav");
 const shadowDir = path.join(root, "apps", "examples", "sensor-suite-shadow-headless");
 const liveProofDir = path.join(root, "apps", "examples", "sensor-suite-shadow-live-proof");
+const onTargetProofDir = path.join(root, "apps", "examples", "sensor-suite-shadow-on-target-proof");
 const violations = [];
 
 function readPackage(directory) {
@@ -65,6 +66,18 @@ requireAllowedDependencies(
     "roslib",
   ]),
 );
+requireAllowedDependencies(
+  "sensor-suite-shadow-on-target-proof",
+  onTargetProofDir,
+  new Set([
+    "@ggcs/arnav",
+    "@ggcs/core",
+    "@ggcs/example-sensor-suite-shadow-headless",
+    "@ggcs/ros",
+    "@ggcs/transport-rosbridge",
+    "roslib",
+  ]),
+);
 
 function walk(directory) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -118,12 +131,33 @@ scan(liveProofDir, {
     ".write(",
   ],
 });
+scan(onTargetProofDir, {
+  forbiddenImports: uiImports,
+  forbiddenTokens: [
+    "window.",
+    "document.",
+    "navigator.",
+    "localStorage",
+    "../src/middleware",
+    "../src/config",
+    "/rosapi/set_param",
+    ".invoke(",
+    ".write(",
+  ],
+});
 
 for (const file of walk(path.join(liveProofDir, "src")).filter((value) => value.endsWith(".ts"))) {
   const source = fs.readFileSync(file, "utf8");
   const relative = path.relative(root, file);
   if (source.includes('from "roslib"') && !relative.endsWith("legacy-reference.ts")) {
     violations.push(`${relative} imports roslib outside the integration-only legacy reference module`);
+  }
+}
+for (const file of walk(path.join(onTargetProofDir, "src")).filter((value) => value.endsWith(".ts"))) {
+  const source = fs.readFileSync(file, "utf8");
+  const relative = path.relative(root, file);
+  if (source.includes('from "roslib"') && !relative.endsWith("legacy-reference.ts")) {
+    violations.push(`${relative} imports roslib outside the on-target legacy reference module`);
   }
 }
 

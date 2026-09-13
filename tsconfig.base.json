@@ -41,6 +41,9 @@
       ],
       "@ggcs/ros-std-msgs": [
         "packages/ros-std-msgs/src/index.ts"
+      ],
+      "@ggcs/example-sensor-suite-shadow-headless/definition": [
+        "apps/examples/sensor-suite-shadow-headless/src/definition.ts"
       ]
     },
     "lib": [

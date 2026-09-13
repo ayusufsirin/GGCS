@@ -48,6 +48,7 @@ COPY apps/examples/rosbridge-service-headless/package.json apps/examples/rosbrid
 COPY apps/examples/rosbridge-topic-headless/package.json apps/examples/rosbridge-topic-headless/package.json
 COPY apps/examples/sensor-suite-shadow-headless/package.json apps/examples/sensor-suite-shadow-headless/package.json
 COPY apps/examples/sensor-suite-shadow-live-proof/package.json apps/examples/sensor-suite-shadow-live-proof/package.json
+COPY apps/examples/sensor-suite-shadow-on-target-proof/package.json apps/examples/sensor-suite-shadow-on-target-proof/package.json
 RUN --mount=type=cache,id=ggcs-pnpm-store,target=/pnpm/store,sharing=locked \
     if [ -n "${NEXUS_NPM_REGISTRY}" ]; then \
       export NPM_CONFIG_REGISTRY="${NEXUS_NPM_REGISTRY%/}/"; \

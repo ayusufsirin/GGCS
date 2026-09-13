@@ -1,22 +1,59 @@
 {
   "files": [],
   "references": [
-    { "path": "./packages/schema" },
-    { "path": "./packages/ros" },
-    { "path": "./packages/ros-std-msgs" },
-    { "path": "./packages/core" },
-    { "path": "./packages/plugin-sdk" },
-    { "path": "./packages/testing" },
-    { "path": "./packages/transforms" },
-    { "path": "./packages/transport-rosbridge" },
-    { "path": "./plugins/arnav" },
-    { "path": "./apps/examples/minimal-headless" },
-    { "path": "./apps/examples/rosbridge-headless" },
-    { "path": "./apps/examples/rosbridge-topic-headless" },
-    { "path": "./apps/examples/rosbridge-command-headless" },
-    { "path": "./apps/examples/rosbridge-service-headless" },
-    { "path": "./apps/examples/rosbridge-parameter-headless" },
-    { "path": "./apps/examples/sensor-suite-shadow-headless" },
-    { "path": "./apps/examples/sensor-suite-shadow-live-proof" }
+    {
+      "path": "./packages/schema"
+    },
+    {
+      "path": "./packages/ros"
+    },
+    {
+      "path": "./packages/ros-std-msgs"
+    },
+    {
+      "path": "./packages/core"
+    },
+    {
+      "path": "./packages/plugin-sdk"
+    },
+    {
+      "path": "./packages/testing"
+    },
+    {
+      "path": "./packages/transforms"
+    },
+    {
+      "path": "./packages/transport-rosbridge"
+    },
+    {
+      "path": "./plugins/arnav"
+    },
+    {
+      "path": "./apps/examples/minimal-headless"
+    },
+    {
+      "path": "./apps/examples/rosbridge-headless"
+    },
+    {
+      "path": "./apps/examples/rosbridge-topic-headless"
+    },
+    {
+      "path": "./apps/examples/rosbridge-command-headless"
+    },
+    {
+      "path": "./apps/examples/rosbridge-service-headless"
+    },
+    {
+      "path": "./apps/examples/rosbridge-parameter-headless"
+    },
+    {
+      "path": "./apps/examples/sensor-suite-shadow-headless"
+    },
+    {
+      "path": "./apps/examples/sensor-suite-shadow-live-proof"
+    },
+    {
+      "path": "./apps/examples/sensor-suite-shadow-on-target-proof"
+    }
   ]
 }
