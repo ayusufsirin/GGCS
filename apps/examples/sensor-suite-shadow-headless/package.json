@@ -7,6 +7,7 @@
     "@ggcs/arnav": "workspace:*",
     "@ggcs/core": "workspace:*",
     "@ggcs/ros": "workspace:*",
+    "@ggcs/ros-std-msgs": "workspace:*",
     "@ggcs/schema": "workspace:*",
     "@ggcs/transforms": "workspace:*",
     "@ggcs/transport-rosbridge": "workspace:*"

@@ -13,6 +13,13 @@ import {
 } from "@ggcs/arnav";
 import { ROS_PLUGIN_ID, createRosDomainPlugin } from "@ggcs/ros";
 import {
+  ROS_STD_COMPUTATION_IDS,
+  ROS_STD_MESSAGE_TYPES,
+  ROS_STD_MSGS_PLUGIN_ID,
+  ROS_STD_TYPE_IDS,
+  createRosStdMsgsPlugin,
+} from "@ggcs/ros-std-msgs";
+import {
   CORE_TYPE_IDS,
   GGCS_SCHEMA_VERSION,
   type ApplicationDefinition,
@@ -31,10 +38,16 @@ import {
 } from "@ggcs/transport-rosbridge";
 
 export const SENSOR_SUITE_ARNAV_TOPIC = "/ArdicLabs/Arnav/Gnss_Ins_data" as const;
+export const SENSOR_SUITE_SPEED_TOPIC = "/speed" as const;
+export const SENSOR_SUITE_ACCELERATION_TOPIC = "/accel" as const;
+export const SENSOR_SUITE_SATELLITES_TOPIC = "/arnav/satellites" as const;
 
 export const SENSOR_SUITE_RESOURCE_IDS = {
   connection: "robot",
   arnavInsRaw: "arnav.ins.raw",
+  vehicleSpeedRaw: "vehicle.speed.raw",
+  vehicleAccelerationRaw: "vehicle.acceleration.raw",
+  arnavSatellitesRaw: "arnav.satellites.raw",
   arnavRollRad: "arnav.roll.rad",
   arnavPitchRad: "arnav.pitch.rad",
   arnavYawRad: "arnav.yaw.rad",
@@ -46,6 +59,9 @@ export const SENSOR_SUITE_RESOURCE_IDS = {
   navLatitudeDeg: "nav.latitude.deg",
   navLongitudeDeg: "nav.longitude.deg",
   navAltitudeM: "nav.altitude.m",
+  vehicleSpeed: "vehicle.speed",
+  vehicleAcceleration: "vehicle.acceleration",
+  arnavSatellites: "arnav.satellites",
   healthSystem: "arnav.health.system",
   healthRollPitch: "arnav.health.rollPitch",
   healthYaw: "arnav.health.yaw",
@@ -94,6 +110,37 @@ export function createArnavSemanticResources(rawSourceId: string): readonly Base
   ];
 }
 
+export function createNumericSemanticResources(options: {
+  readonly speedRawSourceId: string;
+  readonly accelerationRawSourceId: string;
+  readonly satellitesRawSourceId: string;
+}): readonly BaseResourceDefinition[] {
+  const ids = SENSOR_SUITE_RESOURCE_IDS;
+  return [
+    derived(ids.vehicleSpeed, CORE_TYPE_IDS.number, ROS_STD_COMPUTATION_IDS.float64Data, options.speedRawSourceId),
+    derived(ids.vehicleAcceleration, CORE_TYPE_IDS.number, ROS_STD_COMPUTATION_IDS.float64Data, options.accelerationRawSourceId),
+    derived(ids.arnavSatellites, CORE_TYPE_IDS.number, ROS_STD_COMPUTATION_IDS.int64Data, options.satellitesRawSourceId),
+  ];
+}
+
+function topicSource(options: {
+  readonly id: string;
+  readonly type: string;
+  readonly topic: string;
+  readonly messageType: string;
+}): BaseResourceDefinition {
+  return {
+    id: options.id,
+    provider: ROSBRIDGE_PROVIDER_IDS.topicSource,
+    type: options.type,
+    config: {
+      connection: SENSOR_SUITE_RESOURCE_IDS.connection,
+      topic: options.topic,
+      messageType: options.messageType,
+    },
+  };
+}
+
 export function createSensorSuiteShadowDefinition(options: {
   readonly rosbridgeUrl: string;
 }): ApplicationDefinition {
@@ -103,6 +150,7 @@ export function createSensorSuiteShadowDefinition(options: {
     plugins: [
       ROS_PLUGIN_ID,
       ROSBRIDGE_PLUGIN_ID,
+      ROS_STD_MSGS_PLUGIN_ID,
       TRANSFORMS_PLUGIN_ID,
       ARNAV_PLUGIN_ID,
     ],
@@ -121,17 +169,36 @@ export function createSensorSuiteShadowDefinition(options: {
           },
         },
       },
-      {
+      topicSource({
         id: ids.arnavInsRaw,
-        provider: ROSBRIDGE_PROVIDER_IDS.topicSource,
         type: ARNAV_INS_TYPE_ID,
-        config: {
-          connection: ids.connection,
-          topic: SENSOR_SUITE_ARNAV_TOPIC,
-          messageType: ARNAV_INS_MESSAGE_TYPE,
-        },
-      },
+        topic: SENSOR_SUITE_ARNAV_TOPIC,
+        messageType: ARNAV_INS_MESSAGE_TYPE,
+      }),
+      topicSource({
+        id: ids.vehicleSpeedRaw,
+        type: ROS_STD_TYPE_IDS.float64,
+        topic: SENSOR_SUITE_SPEED_TOPIC,
+        messageType: ROS_STD_MESSAGE_TYPES.float64,
+      }),
+      topicSource({
+        id: ids.vehicleAccelerationRaw,
+        type: ROS_STD_TYPE_IDS.float64,
+        topic: SENSOR_SUITE_ACCELERATION_TOPIC,
+        messageType: ROS_STD_MESSAGE_TYPES.float64,
+      }),
+      topicSource({
+        id: ids.arnavSatellitesRaw,
+        type: ROS_STD_TYPE_IDS.int64,
+        topic: SENSOR_SUITE_SATELLITES_TOPIC,
+        messageType: ROS_STD_MESSAGE_TYPES.int64,
+      }),
       ...createArnavSemanticResources(ids.arnavInsRaw),
+      ...createNumericSemanticResources({
+        speedRawSourceId: ids.vehicleSpeedRaw,
+        accelerationRawSourceId: ids.vehicleAccelerationRaw,
+        satellitesRawSourceId: ids.arnavSatellitesRaw,
+      }),
     ],
   };
 }
@@ -140,8 +207,15 @@ export function createSensorSuiteShadowRegistry(
   transportOptions: RosbridgeTransportPluginOptions = {},
 ) {
   return createRegistryBuilder()
-    .register(createRosDomainPlugin({ messageTypes: [ARNAV_INS_MESSAGE_TYPE] }))
+    .register(createRosDomainPlugin({
+      messageTypes: [
+        ARNAV_INS_MESSAGE_TYPE,
+        ROS_STD_MESSAGE_TYPES.float64,
+        ROS_STD_MESSAGE_TYPES.int64,
+      ],
+    }))
     .register(createRosbridgeTransportPlugin(transportOptions))
+    .register(createRosStdMsgsPlugin())
     .register(createTransformsPlugin())
     .register(createArnavPlugin());
 }

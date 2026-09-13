@@ -10,6 +10,7 @@
     { "path": "../../../packages/core" },
     { "path": "../../../packages/plugin-sdk" },
     { "path": "../../../packages/ros" },
+    { "path": "../../../packages/ros-std-msgs" },
     { "path": "../../../packages/transforms" },
     { "path": "../../../packages/transport-rosbridge" },
     { "path": "../../../plugins/arnav" }
