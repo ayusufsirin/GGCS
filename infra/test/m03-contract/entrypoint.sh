@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# ROS/ament setup scripts may read optional variables before defining them.
+# Disable nounset only while sourcing trusted environment setup, then restore
+# strict mode for the GGCS-owned fixture logic below.
+set +u
 source "/opt/ros/${ROS_DISTRO}/setup.bash"
 source /opt/ggcs_ws/install/setup.bash
+set -u
 
 cleanup() {
   if [[ -n "${ROSBRIDGE_PID:-}" ]]; then

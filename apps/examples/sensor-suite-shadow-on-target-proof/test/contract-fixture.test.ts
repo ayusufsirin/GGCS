@@ -25,12 +25,23 @@ describe("hardware-free M03 production-contract fixture", () => {
   it("wires a hermetic ROS2+rosbridge contract gate instead of requiring hardware", () => {
     const compose = read("compose.yaml");
     const fixture = read("infra/test/m03-contract/fixture.py");
+    const entrypoint = read("infra/test/m03-contract/entrypoint.sh");
 
     expect(compose).toContain("m03-contract-ros:");
     expect(compose).toContain("ws://m03-contract-ros:9090");
     expect(compose).toContain("socket.create_connection(('127.0.0.1', 9090), 2)");
     expect(compose).toContain("condition: service_healthy");
     expect(compose).toContain("/ggcs_m03_contract_fixture:ggcs_shadow_test_parameter");
+
+    const nounsetOff = entrypoint.indexOf("set +u");
+    const rosSetup = entrypoint.indexOf('source "/opt/ros/${ROS_DISTRO}/setup.bash"');
+    const workspaceSetup = entrypoint.indexOf("source /opt/ggcs_ws/install/setup.bash");
+    const nounsetOn = entrypoint.indexOf("set -u", workspaceSetup);
+    expect(nounsetOff).toBeGreaterThanOrEqual(0);
+    expect(rosSetup).toBeGreaterThan(nounsetOff);
+    expect(workspaceSetup).toBeGreaterThan(rosSetup);
+    expect(nounsetOn).toBeGreaterThan(workspaceSetup);
+
     expect(fixture).toContain('"/ArdicLabs/Arnav/Gnss_Ins_data"');
     expect(fixture).toContain('"/speed"');
     expect(fixture).toContain('"/accel"');
