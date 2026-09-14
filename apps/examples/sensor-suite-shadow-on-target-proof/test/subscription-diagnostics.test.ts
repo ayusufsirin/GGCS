@@ -6,7 +6,11 @@ import type {
   RosbridgeTopicListener,
   RosbridgeTopicOptions,
 } from "@ggcs/transport-rosbridge";
-import { SubscriptionDiagnostics, createDiagnosticClientFactory } from "../src/subscription-diagnostics.js";
+import {
+  SubscriptionDiagnostics,
+  assertSinglePhysicalSubscriptions,
+  createDiagnosticClientFactory,
+} from "../src/subscription-diagnostics.js";
 
 class FakeTopic implements RosbridgeTopic {
   subscribe(_listener: RosbridgeTopicListener): void {}
@@ -44,4 +48,26 @@ it("records active/max physical subscriptions without changing the client contra
     activeSubscriptions: 0,
     maxActiveSubscriptions: 1,
   });
+});
+
+
+it("requires only the physical topics explicitly selected by the proof mode", () => {
+  const diagnostics = new SubscriptionDiagnostics();
+  for (const topic of ["/ArdicLabs/Arnav/Gnss_Ins_data", "/speed", "/accel", "/arnav/satellites"]) {
+    diagnostics.recordSubscribe(topic);
+  }
+  const snapshot = diagnostics.snapshot();
+  expect(() => assertSinglePhysicalSubscriptions(snapshot, [
+    "/ArdicLabs/Arnav/Gnss_Ins_data",
+    "/speed",
+    "/accel",
+    "/arnav/satellites",
+  ])).not.toThrow();
+  expect(() => assertSinglePhysicalSubscriptions(snapshot, [
+    "/ArdicLabs/Arnav/Gnss_Ins_data",
+    "/speed",
+    "/accel",
+    "/arnav/satellites",
+    "/zed/zed_node/rgb/color/rect/image/compressed",
+  ])).toThrow(/No GGCS subscription diagnostic/);
 });

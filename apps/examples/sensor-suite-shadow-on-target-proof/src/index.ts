@@ -27,6 +27,7 @@ import {
 import { CameraEvidenceRecorder, assertCameraParity } from "./camera-evidence.js";
 import {
   SubscriptionDiagnostics,
+  assertSinglePhysicalSubscriptions,
   createDiagnosticClientFactory,
 } from "./subscription-diagnostics.js";
 
@@ -135,25 +136,16 @@ function assertNoSemanticMismatch(current: Record<OnTargetSemanticResourceId, Pa
   }
 }
 
-function assertSinglePhysicalSubscriptions(snapshot: Readonly<Record<string, { readonly activeSubscriptions: number; readonly maxActiveSubscriptions: number }>>): void {
-  for (const topic of [
-    SENSOR_SUITE_ARNAV_TOPIC,
-    SENSOR_SUITE_SPEED_TOPIC,
-  SENSOR_SUITE_ZED_RGB_TOPIC,
-    SENSOR_SUITE_ACCELERATION_TOPIC,
-    SENSOR_SUITE_SATELLITES_TOPIC,
-  ]) {
-    const diagnostic = snapshot[topic];
-    if (!diagnostic) throw new Error(`No GGCS subscription diagnostic was recorded for ${topic}`);
-    if (diagnostic.activeSubscriptions !== 1 || diagnostic.maxActiveSubscriptions !== 1) {
-      throw new Error(`GGCS physical subscription sharing failed for ${topic}: ${JSON.stringify(diagnostic)}`);
-    }
-  }
-}
-
 const cameraLegacy = new CameraEvidenceRecorder();
 const cameraGgcs = new CameraEvidenceRecorder();
 const subscriptionDiagnostics = new SubscriptionDiagnostics();
+const requiredPhysicalSubscriptionTopics = [
+  SENSOR_SUITE_ARNAV_TOPIC,
+  SENSOR_SUITE_SPEED_TOPIC,
+  SENSOR_SUITE_ACCELERATION_TOPIC,
+  SENSOR_SUITE_SATELLITES_TOPIC,
+  ...(observeCamera ? [SENSOR_SUITE_ZED_RGB_TOPIC] : []),
+] as const;
 const compiled = compileSensorSuiteShadowApplication({
   rosbridgeUrl: endpoint,
   includeCamera: observeCamera,
@@ -234,7 +226,7 @@ try {
     );
   }
   const subscriptionBaseline = subscriptionDiagnostics.snapshot();
-  assertSinglePhysicalSubscriptions(subscriptionBaseline);
+  assertSinglePhysicalSubscriptions(subscriptionBaseline, requiredPhysicalSubscriptionTopics);
   const parameterBaseline = await checkParameters("baseline");
 
   for (const recorder of recorders.values()) recorder.reset();
@@ -260,7 +252,7 @@ try {
   if (!thresholdsSatisfied(finalReports)) throw new Error("On-target evidence lost required matches while finalizing skew queues");
   const parameterFinal = await checkParameters("final");
   const subscriptionFinal = subscriptionDiagnostics.snapshot();
-  assertSinglePhysicalSubscriptions(subscriptionFinal);
+  assertSinglePhysicalSubscriptions(subscriptionFinal, requiredPhysicalSubscriptionTopics);
   const cameraLegacySummary = cameraLegacy.summary();
   const cameraGgcsSummary = cameraGgcs.summary();
   if (observeCamera) assertCameraParity(cameraLegacySummary, cameraGgcsSummary, cameraMinimumSamples);

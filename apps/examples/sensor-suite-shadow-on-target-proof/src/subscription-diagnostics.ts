@@ -115,6 +115,20 @@ class DiagnosticClient implements RosbridgeClient {
   }
 }
 
+
+export function assertSinglePhysicalSubscriptions(
+  snapshot: Readonly<Record<string, TopicSubscriptionDiagnostic>>,
+  topics: readonly string[],
+): void {
+  for (const topic of topics) {
+    const diagnostic = snapshot[topic];
+    if (!diagnostic) throw new Error(`No GGCS subscription diagnostic was recorded for ${topic}`);
+    if (diagnostic.activeSubscriptions !== 1 || diagnostic.maxActiveSubscriptions !== 1) {
+      throw new Error(`GGCS physical subscription sharing failed for ${topic}: ${JSON.stringify(diagnostic)}`);
+    }
+  }
+}
+
 export function createDiagnosticClientFactory(
   diagnostics: SubscriptionDiagnostics,
   delegate: RosbridgeClientFactory = defaultRosbridgeClientFactory,
