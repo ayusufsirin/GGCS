@@ -332,6 +332,12 @@ services:
       ROS_LOCALHOST_ONLY: "0"
       CYCLONEDDS_URI: >-
         <CycloneDDS><Domain><General><Interfaces><NetworkInterface name="eth0" multicast="true"/></Interfaces><AllowMulticast>true</AllowMulticast></General></Domain></CycloneDDS>
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import socket; s=socket.create_connection(('127.0.0.1', 9090), 2); s.close()"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+      start_period: 2s
     restart: unless-stopped
 
   m03-contract-proof:
@@ -360,5 +366,5 @@ services:
       GGCS_M03_ON_TARGET_CAMERA_MIN_SAMPLES: ${GGCS_M03_CONTRACT_CAMERA_MIN_SAMPLES:-20}
     depends_on:
       m03-contract-ros:
-        condition: service_started
+        condition: service_healthy
     command: ["pnpm", "run", "example:m03:on-target"]

@@ -28,6 +28,8 @@ describe("hardware-free M03 production-contract fixture", () => {
 
     expect(compose).toContain("m03-contract-ros:");
     expect(compose).toContain("ws://m03-contract-ros:9090");
+    expect(compose).toContain("socket.create_connection(('127.0.0.1', 9090), 2)");
+    expect(compose).toContain("condition: service_healthy");
     expect(compose).toContain("/ggcs_m03_contract_fixture:ggcs_shadow_test_parameter");
     expect(fixture).toContain('"/ArdicLabs/Arnav/Gnss_Ins_data"');
     expect(fixture).toContain('"/speed"');
