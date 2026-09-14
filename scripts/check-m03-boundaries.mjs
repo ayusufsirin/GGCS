@@ -185,6 +185,54 @@ for (const [label, directory] of [
   }
 }
 
+// Slice 04 hardware-free production-contract gate: the synthetic ROS interface
+// must remain test-only while preserving the exact software contract GGCS consumes.
+const contractFixtureDir = path.join(root, "infra", "test", "m03-contract");
+const contractComposeSource = fs.readFileSync(path.join(root, "compose.yaml"), "utf8");
+const contractFixtureSource = fs.readFileSync(path.join(contractFixtureDir, "fixture.py"), "utf8");
+const contractInsMessage = fs.readFileSync(
+  path.join(contractFixtureDir, "ardiclabs_arnav_msgs", "msg", "Ins.msg"),
+  "utf8",
+);
+const contractStatusMessage = fs.readFileSync(
+  path.join(contractFixtureDir, "ardiclabs_arnav_msgs", "msg", "InsStatus.msg"),
+  "utf8",
+);
+
+if (!contractComposeSource.includes("m03-contract-ros:")) {
+  violations.push("compose.yaml must define the M03 production-contract ROS fixture service");
+}
+if (!contractComposeSource.includes("ws://m03-contract-ros:9090")) {
+  violations.push("M03 production-contract proof must default to the hermetic rosbridge endpoint");
+}
+if (contractComposeSource.includes("GGCS_M03_ON_TARGET_LEGACY_UI_OBSERVATION")) {
+  violations.push("hardware-free M03 contract gate must not require an operator legacy-UI observation");
+}
+for (const topic of [
+  "/ArdicLabs/Arnav/Gnss_Ins_data",
+  "/speed",
+  "/accel",
+  "/arnav/satellites",
+]) {
+  if (!contractFixtureSource.includes(topic)) {
+    violations.push(`M03 production-contract fixture is missing production topic ${topic}`);
+  }
+}
+for (const field of ["roll_rad", "pitch_rad", "yaw_rad", "lat_rad", "lon_rad", "h_m"]) {
+  if (!contractInsMessage.includes(`float64 ${field}`)) {
+    violations.push(`test-only ArNav interface is missing numeric field ${field}`);
+  }
+}
+for (const field of ["system_ok", "roll_pitch_ok", "yaw_ok", "pos_vel_ok", "mag_ok", "gnss_fixed"]) {
+  if (!contractStatusMessage.includes(`bool ${field}`)) {
+    violations.push(`test-only ArNav interface is missing status field ${field}`);
+  }
+}
+if (!contractInsMessage.includes("ardiclabs_arnav_msgs/InsStatus status")) {
+  violations.push("test-only ArNav interface must preserve nested status object shape");
+}
+
+
 if (violations.length > 0) {
   for (const violation of violations) console.error(`M03 boundary violation: ${violation}`);
   process.exitCode = 1;

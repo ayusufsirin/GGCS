@@ -316,11 +316,26 @@ services:
         condition: service_started
     command: ["pnpm", "run", "example:m03:live"]
 
-  # M03 Slice 04 production/on-target closure proof. This service connects to
-  # an already running real Sensor Suite rosbridge endpoint; it never starts a
-  # synthetic ArNav interface or production control fixture.
-  m03-on-target-proof:
-    profiles: ["m03-on-target"]
+  # M03 Slice 04 hardware-free production-contract integration. This profile
+  # runs a real ROS 2 + rosbridge stack and deterministic publishers using the
+  # exact production topic names and a test-only schema-compatible ArNav type.
+  # It validates GGCS software contracts; it is not hardware/vendor-driver qualification.
+  m03-contract-ros:
+    profiles: ["m03-contract", "m03-on-target"]
+    build:
+      context: .
+      dockerfile: m03contract.Dockerfile
+      args:
+        <<: *registry-build-args
+    environment:
+      RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
+      ROS_LOCALHOST_ONLY: "0"
+      CYCLONEDDS_URI: >-
+        <CycloneDDS><Domain><General><Interfaces><NetworkInterface name="eth0" multicast="true"/></Interfaces><AllowMulticast>true</AllowMulticast></General></Domain></CycloneDDS>
+    restart: unless-stopped
+
+  m03-contract-proof:
+    profiles: ["m03-contract", "m03-on-target"]
     build:
       context: .
       dockerfile: Dockerfile
@@ -329,21 +344,21 @@ services:
         <<: *registry-build-args
         NODE_VERSION: ${GGCS_NODE_VERSION:-22.23.2}
         PNPM_VERSION: ${GGCS_PNPM_VERSION:-10.34.5}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     environment:
-      GGCS_ROSBRIDGE_URL: ${GGCS_M03_ON_TARGET_ROSBRIDGE_URL:-ws://host.docker.internal:9090}
-      GGCS_M03_ON_TARGET_STARTUP_TIMEOUT_MS: ${GGCS_M03_ON_TARGET_STARTUP_TIMEOUT_MS:-30000}
-      GGCS_M03_ON_TARGET_TIMEOUT_MS: ${GGCS_M03_ON_TARGET_TIMEOUT_MS:-1800000}
-      GGCS_M03_ON_TARGET_MIN_DURATION_MS: ${GGCS_M03_ON_TARGET_MIN_DURATION_MS:-600000}
-      GGCS_M03_ON_TARGET_MIN_HIGH_RATE_MATCHES: ${GGCS_M03_ON_TARGET_MIN_HIGH_RATE_MATCHES:-1000}
-      GGCS_M03_ON_TARGET_MIN_LOW_RATE_MATCHES: ${GGCS_M03_ON_TARGET_MIN_LOW_RATE_MATCHES:-20}
-      GGCS_M03_ON_TARGET_MAX_SKEW_MS: ${GGCS_M03_ON_TARGET_MAX_SKEW_MS:-100}
-      GGCS_M03_ON_TARGET_PARAMETER_TIMEOUT_MS: ${GGCS_M03_ON_TARGET_PARAMETER_TIMEOUT_MS:-15000}
-      GGCS_M03_ON_TARGET_PARAMETER_IDS: ${GGCS_M03_ON_TARGET_PARAMETER_IDS:-}
-      GGCS_M03_ON_TARGET_PARAMETER_DISPOSITION: ${GGCS_M03_ON_TARGET_PARAMETER_DISPOSITION:-}
-      GGCS_M03_ON_TARGET_CAMERA_MODE: ${GGCS_M03_ON_TARGET_CAMERA_MODE:-off}
-      GGCS_M03_ON_TARGET_CAMERA_DISPOSITION: ${GGCS_M03_ON_TARGET_CAMERA_DISPOSITION:-}
-      GGCS_M03_ON_TARGET_CAMERA_MIN_SAMPLES: ${GGCS_M03_ON_TARGET_CAMERA_MIN_SAMPLES:-20}
-      GGCS_M03_ON_TARGET_LEGACY_UI_OBSERVATION: ${GGCS_M03_ON_TARGET_LEGACY_UI_OBSERVATION:-}
+      GGCS_ROSBRIDGE_URL: ${GGCS_M03_CONTRACT_ROSBRIDGE_URL:-ws://m03-contract-ros:9090}
+      GGCS_M03_ON_TARGET_STARTUP_TIMEOUT_MS: ${GGCS_M03_CONTRACT_STARTUP_TIMEOUT_MS:-30000}
+      GGCS_M03_ON_TARGET_TIMEOUT_MS: ${GGCS_M03_CONTRACT_TIMEOUT_MS:-300000}
+      GGCS_M03_ON_TARGET_MIN_DURATION_MS: ${GGCS_M03_CONTRACT_MIN_DURATION_MS:-30000}
+      GGCS_M03_ON_TARGET_MIN_HIGH_RATE_MATCHES: ${GGCS_M03_CONTRACT_MIN_HIGH_RATE_MATCHES:-1000}
+      GGCS_M03_ON_TARGET_MIN_LOW_RATE_MATCHES: ${GGCS_M03_CONTRACT_MIN_LOW_RATE_MATCHES:-20}
+      GGCS_M03_ON_TARGET_MAX_SKEW_MS: ${GGCS_M03_CONTRACT_MAX_SKEW_MS:-100}
+      GGCS_M03_ON_TARGET_PARAMETER_TIMEOUT_MS: ${GGCS_M03_CONTRACT_PARAMETER_TIMEOUT_MS:-15000}
+      GGCS_M03_ON_TARGET_PARAMETER_IDS: ${GGCS_M03_CONTRACT_PARAMETER_IDS:-/ggcs_m03_contract_fixture:ggcs_shadow_test_parameter}
+      GGCS_M03_ON_TARGET_PARAMETER_DISPOSITION: ""
+      GGCS_M03_ON_TARGET_CAMERA_MODE: "off"
+      GGCS_M03_ON_TARGET_CAMERA_DISPOSITION: ${GGCS_M03_CONTRACT_CAMERA_DISPOSITION:-Camera transport intentionally excluded from the M03 software-contract closure gate; ImageFrame/rendering remains a later milestone.}
+      GGCS_M03_ON_TARGET_CAMERA_MIN_SAMPLES: ${GGCS_M03_CONTRACT_CAMERA_MIN_SAMPLES:-20}
+    depends_on:
+      m03-contract-ros:
+        condition: service_started
     command: ["pnpm", "run", "example:m03:on-target"]

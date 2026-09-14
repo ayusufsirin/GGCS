@@ -28,3 +28,6 @@ yarn-error.log*
 
 # local Docker/Compose configuration
 /.env
+
+__pycache__/
+*.py[cod]

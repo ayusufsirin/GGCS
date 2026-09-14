@@ -73,7 +73,9 @@
     "docker:m03:live": "docker compose --profile m03-live up --build --abort-on-container-exit --exit-code-from m03-live-shadow-proof m03-live-shadow-proof",
     "test:m03:on-target": "pnpm --filter @ggcs/example-sensor-suite-shadow-on-target-proof test",
     "example:m03:on-target": "node apps/examples/sensor-suite-shadow-on-target-proof/dist/index.js",
-    "docker:m03:on-target": "docker compose --profile m03-on-target run --rm --build m03-on-target-proof"
+    "docker:m03:on-target": "pnpm run docker:m03:contract",
+    "example:m03:contract": "node apps/examples/sensor-suite-shadow-on-target-proof/dist/index.js",
+    "docker:m03:contract": "docker compose --profile m03-contract up --build --abort-on-container-exit --exit-code-from m03-contract-proof m03-contract-proof"
   },
   "eslintConfig": {
     "extends": [

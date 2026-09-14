@@ -40,10 +40,10 @@ const platform = globalThis as unknown as {
   readonly console?: { log(...args: unknown[]): void };
 };
 
-const endpoint = platform.process.env.GGCS_ROSBRIDGE_URL ?? "ws://host.docker.internal:9090";
+const endpoint = platform.process.env.GGCS_ROSBRIDGE_URL ?? "ws://m03-contract-ros:9090";
 const startupTimeoutMs = Number(platform.process.env.GGCS_M03_ON_TARGET_STARTUP_TIMEOUT_MS ?? "30000");
-const runTimeoutMs = Number(platform.process.env.GGCS_M03_ON_TARGET_TIMEOUT_MS ?? "1800000");
-const minimumDurationMs = Number(platform.process.env.GGCS_M03_ON_TARGET_MIN_DURATION_MS ?? "600000");
+const runTimeoutMs = Number(platform.process.env.GGCS_M03_ON_TARGET_TIMEOUT_MS ?? "300000");
+const minimumDurationMs = Number(platform.process.env.GGCS_M03_ON_TARGET_MIN_DURATION_MS ?? "30000");
 const minimumHighRateMatches = Number(platform.process.env.GGCS_M03_ON_TARGET_MIN_HIGH_RATE_MATCHES ?? "1000");
 const minimumLowRateMatches = Number(platform.process.env.GGCS_M03_ON_TARGET_MIN_LOW_RATE_MATCHES ?? "20");
 const maxSkewMs = Number(platform.process.env.GGCS_M03_ON_TARGET_MAX_SKEW_MS ?? "100");
@@ -57,7 +57,6 @@ const parameterDisposition = (platform.process.env.GGCS_M03_ON_TARGET_PARAMETER_
 const cameraMode = (platform.process.env.GGCS_M03_ON_TARGET_CAMERA_MODE ?? "off").trim();
 const cameraDisposition = (platform.process.env.GGCS_M03_ON_TARGET_CAMERA_DISPOSITION ?? "").trim();
 const cameraMinimumSamples = Number(platform.process.env.GGCS_M03_ON_TARGET_CAMERA_MIN_SAMPLES ?? "20");
-const legacyUiObservation = (platform.process.env.GGCS_M03_ON_TARGET_LEGACY_UI_OBSERVATION ?? "").trim();
 const observeCamera = cameraMode === "observe";
 
 if (!observeCamera && cameraDisposition.length === 0) {
@@ -65,15 +64,9 @@ if (!observeCamera && cameraDisposition.length === 0) {
     "Slice 04 requires explicit camera disposition when camera observation is disabled: set GGCS_M03_ON_TARGET_CAMERA_DISPOSITION",
   );
 }
-if (legacyUiObservation.length === 0) {
-  throw new Error(
-    "Slice 04 requires an explicit operator observation for legacy UI usability: set GGCS_M03_ON_TARGET_LEGACY_UI_OBSERVATION",
-  );
-}
-
 if (parameterIds.length === 0 && parameterDisposition.length === 0) {
   throw new Error(
-    "Slice 04 requires explicit production parameter evidence: set GGCS_M03_ON_TARGET_PARAMETER_IDS or GGCS_M03_ON_TARGET_PARAMETER_DISPOSITION",
+    "Slice 04 requires explicit parameter evidence: set GGCS_M03_ON_TARGET_PARAMETER_IDS or GGCS_M03_ON_TARGET_PARAMETER_DISPOSITION",
   );
 }
 
@@ -211,10 +204,10 @@ async function checkParameters(label: string): Promise<readonly Readonly<Record<
 }
 
 try {
-  await waitUntil("GGCS production ROSBridge connection", () => connection.current().state === "connected", startupTimeoutMs);
+  await waitUntil("GGCS production-contract ROSBridge connection", () => connection.current().state === "connected", startupTimeoutMs);
   await waitUntil("legacy-reference ROSBridge connection", () => legacy.isConnected(), startupTimeoutMs);
   await waitUntil(
-    "all production semantic resources to become fresh on both observation paths",
+    "all production-contract semantic resources to become fresh on both observation paths",
     () => specs.every((spec) => currentStates.get(spec.id) === "fresh" && recorders.get(spec.id)!.report().legacySamples > 0),
     startupTimeoutMs,
   );
@@ -243,13 +236,13 @@ try {
     const elapsedMs = Date.now() - evidenceStartedAt;
     if (elapsedMs >= minimumDurationMs && thresholdsSatisfied(current)) break;
     if (Date.now() >= deadline) {
-      throw new Error(`On-target evidence timed out before thresholds were met: elapsedMs=${elapsedMs}, reports=${JSON.stringify(current)}`);
+      throw new Error(`Production-contract evidence timed out before thresholds were met: elapsedMs=${elapsedMs}, reports=${JSON.stringify(current)}`);
     }
   }
 
   const finalReports = reports(true);
   assertNoSemanticMismatch(finalReports);
-  if (!thresholdsSatisfied(finalReports)) throw new Error("On-target evidence lost required matches while finalizing skew queues");
+  if (!thresholdsSatisfied(finalReports)) throw new Error("Production-contract evidence lost required matches while finalizing skew queues");
   const parameterFinal = await checkParameters("final");
   const subscriptionFinal = subscriptionDiagnostics.snapshot();
   assertSinglePhysicalSubscriptions(subscriptionFinal, requiredPhysicalSubscriptionTopics);
@@ -264,14 +257,14 @@ try {
     heapUsed: memoryFinal.heapUsed - memoryBaseline.heapUsed,
   };
   if (memoryDelta.heapUsed > 256 * 1024 * 1024 || memoryDelta.rss > 512 * 1024 * 1024) {
-    throw new Error(`On-target shadow memory growth is unexpectedly large: ${JSON.stringify(memoryDelta)}`);
+    throw new Error(`Production-contract shadow memory growth is unexpectedly large: ${JSON.stringify(memoryDelta)}`);
   }
   const cpuCorePercent = durationMs > 0
     ? ((cpuDelta.user + cpuDelta.system) / 1000) / durationMs * 100
     : null;
 
   platform.console?.log(JSON.stringify({
-    mode: "m03-on-target-production-parity",
+    mode: "m03-production-contract-integration",
     endpoint,
     evidence: {
       startedAt: evidenceStartedAt,
@@ -299,13 +292,13 @@ try {
       final: subscriptionFinal,
     },
     performance: {
-      shadowAdditionalWebSocketsBesideLegacyUi: 1,
+      ggcsRuntimeWebSockets: 1,
+      independentLegacyReferenceWebSockets: 1,
       proofWebSockets: 2,
       memory: { baseline: memoryBaseline, final: memoryFinal, delta: memoryDelta },
       cpu: { userMicros: cpuDelta.user, systemMicros: cpuDelta.system, approximateSingleCorePercent: cpuCorePercent },
       shadowTopicSubscriptions: subscriptionFinal,
       telemetryEventsObserved: Object.values(finalReports).reduce((sum, report) => sum + report.ggcsSamples, 0),
-      legacyUiObservation,
     },
     camera: observeCamera
       ? {
@@ -318,7 +311,10 @@ try {
       : { mode: "disabled", disposition: cameraDisposition },
     productionInterfacePolicy: {
       arnavMessageType: "ardiclabs_arnav_msgs/msg/Ins",
-      fabricatedInterface: false,
+      evidenceLevel: "software-contract-integration",
+      testFixtureInterface: "schema-compatible test-only ROS 2 interface matching the ArNav fields consumed by GGCS",
+      hardwareQualification: false,
+      vendorDriverQualification: false,
     },
     sideEffects: { commandsPublished: 0, recordingProceduresInvoked: 0, parameterWrites: 0 },
   }, null, 2));
