@@ -44,6 +44,9 @@
       ],
       "@ggcs/example-sensor-suite-shadow-headless/definition": [
         "apps/examples/sensor-suite-shadow-headless/src/definition.ts"
+      ],
+      "@ggcs/sensor-suite": [
+        "packages/sensor-suite/src/index.ts"
       ]
     },
     "lib": [

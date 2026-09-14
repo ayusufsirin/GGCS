@@ -35,6 +35,7 @@ COPY packages/core/package.json packages/core/package.json
 COPY packages/plugin-sdk/package.json packages/plugin-sdk/package.json
 COPY packages/ros/package.json packages/ros/package.json
 COPY packages/ros-std-msgs/package.json packages/ros-std-msgs/package.json
+COPY packages/sensor-suite/package.json packages/sensor-suite/package.json
 COPY packages/schema/package.json packages/schema/package.json
 COPY packages/testing/package.json packages/testing/package.json
 COPY packages/transforms/package.json packages/transforms/package.json
@@ -81,6 +82,9 @@ CMD ["pnpm", "run", "example:m02"]
 
 FROM workspace AS m03-verify
 CMD ["pnpm", "run", "verify:m03"]
+
+FROM workspace AS m04-verify
+CMD ["pnpm", "run", "verify:m04"]
 
 FROM workspace AS m03-live-proof
 RUN pnpm run build:m03

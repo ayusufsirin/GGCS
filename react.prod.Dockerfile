@@ -1,11 +1,14 @@
 # syntax=docker/dockerfile:1
-# Multi-stage production build for the legacy React application.
+# Multi-stage production build for the React application with M04 workspace packages.
 
 ARG DOCKER_REGISTRY=docker.io
 ARG NODE_VERSION=22.23.2
+ARG PNPM_VERSION=10.34.5
 FROM ${DOCKER_REGISTRY}/library/node:${NODE_VERSION}-bookworm AS builder
 
+ARG PNPM_VERSION
 ARG REACT_APP_GGCS_ROSBRIDGE_URL
+ARG REACT_APP_GGCS_BACKEND_MODE=legacy
 ARG NEXUS_NPM_REGISTRY=""
 ARG NEXUS_PYPI_INDEX_URL=""
 ARG NEXUS_APT_DEBIAN_URL=""
@@ -16,20 +19,27 @@ ARG NEXUS_APT_UBUNTU_PORTS_URL=""
 ARG NEXUS_APT_ROS2_URL=""
 
 ENV REACT_APP_GGCS_ROSBRIDGE_URL=${REACT_APP_GGCS_ROSBRIDGE_URL}
+ENV REACT_APP_GGCS_BACKEND_MODE=${REACT_APP_GGCS_BACKEND_MODE}
 WORKDIR /app
 
 COPY docker/nexus/configure-registries.sh /usr/local/bin/ggcs-configure-registries
-RUN ggcs-configure-registries
+RUN ggcs-configure-registries \
+    && if [ -n "${NEXUS_NPM_REGISTRY}" ]; then \
+         export COREPACK_NPM_REGISTRY="${NEXUS_NPM_REGISTRY%/}"; \
+         export NPM_CONFIG_REGISTRY="${NEXUS_NPM_REGISTRY%/}/"; \
+       fi \
+    && corepack enable \
+    && corepack prepare "pnpm@${PNPM_VERSION}" --activate
 
-COPY package.json package-lock.json tsconfig.json ./
-RUN if [ -n "${NEXUS_NPM_REGISTRY}" ]; then \
+COPY . .
+RUN --mount=type=cache,id=ggcs-web-prod-pnpm-store,target=/pnpm/store,sharing=locked \
+    if [ -n "${NEXUS_NPM_REGISTRY}" ]; then \
       export NPM_CONFIG_REGISTRY="${NEXUS_NPM_REGISTRY%/}/"; \
     fi \
-    && npm ci
-
-COPY src ./src
-COPY public ./public
-RUN npm run build
+    && pnpm config set store-dir /pnpm/store \
+    && pnpm install \
+    && pnpm --filter @ggcs/sensor-suite build \
+    && pnpm run build
 
 FROM ${DOCKER_REGISTRY}/library/nginx:alpine
 COPY --from=builder /app/build /usr/share/nginx/html

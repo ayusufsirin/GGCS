@@ -1,12 +1,20 @@
 import React from 'react';
 import './App.css';
 import { Dashboard } from "./bootstrap";
+import { RuntimeCompatibilityProvider } from "./runtime/compatibility-context";
+import type { SensorSuiteCompatibilityAccess } from "./runtime/sensor-suite-application";
 
-function App() {
+export interface AppProps {
+  readonly runtimeCompatibility: SensorSuiteCompatibilityAccess;
+}
+
+function App({ runtimeCompatibility }: AppProps) {
   return (
-    <div className="App">
-      <Dashboard/>
-    </div>
+    <RuntimeCompatibilityProvider access={runtimeCompatibility}>
+      <div className="App">
+        <Dashboard/>
+      </div>
+    </RuntimeCompatibilityProvider>
   );
 }
 

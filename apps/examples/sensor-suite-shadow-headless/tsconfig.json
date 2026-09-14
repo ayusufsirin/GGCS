@@ -13,7 +13,8 @@
     { "path": "../../../packages/ros-std-msgs" },
     { "path": "../../../packages/transforms" },
     { "path": "../../../packages/transport-rosbridge" },
-    { "path": "../../../plugins/arnav" }
+    { "path": "../../../plugins/arnav" },
+    { "path": "../../../packages/sensor-suite" }
   ],
   "include": ["src/**/*.ts"]
 }

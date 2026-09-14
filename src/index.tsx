@@ -3,15 +3,54 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
+import { parseSensorSuiteBackendMode } from './runtime/backend-mode';
+import { resolveRosbridgeUrl } from './runtime/rosbridge-url';
+import { createSensorSuiteWebApplication } from './runtime/sensor-suite-application';
 
-const root = ReactDOM.createRoot(
-  document.getElementById('root') as HTMLElement
-);
-root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+async function startWebApplication() {
+  const mode = parseSensorSuiteBackendMode(process.env.REACT_APP_GGCS_BACKEND_MODE);
+  const application = createSensorSuiteWebApplication({
+    mode,
+    rosbridgeUrl: resolveRosbridgeUrl({
+      envUrl: process.env.REACT_APP_GGCS_ROSBRIDGE_URL,
+    }),
+  });
+
+  // In M04-S1, shadow Runtime failure must not take down the authoritative
+  // legacy UI. Future compat-read/full modes fail closed until their hooks are
+  // implemented rather than silently falling back mid-session.
+  try {
+    await application.start();
+  } catch (error) {
+    if (mode !== 'shadow') throw error;
+    console.error('GGCS shadow Runtime failed to start; continuing with legacy UI', error);
+  }
+
+  const root = ReactDOM.createRoot(
+    document.getElementById('root') as HTMLElement
+  );
+
+  root.render(
+    <React.StrictMode>
+      <App runtimeCompatibility={application.compatibility} />
+    </React.StrictMode>
+  );
+
+  let stopping = false;
+  const shutdown = () => {
+    if (stopping) return;
+    stopping = true;
+    root.unmount();
+    void application.stop().catch((error) => {
+      console.error('GGCS Runtime shutdown failed', error);
+    });
+  };
+  window.addEventListener('pagehide', shutdown, { once: true });
+}
+
+void startWebApplication().catch((error) => {
+  console.error('GGCS Web application failed to start', error);
+});
 
 // If you want to start measuring performance in your app, pass a function
 // to log results (for example: reportWebVitals(console.log))

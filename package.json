@@ -24,7 +24,9 @@
     "react-scripts": "5.0.1",
     "roslib": "^1.4.1",
     "typescript": "^4.9.5",
-    "web-vitals": "^2.1.4"
+    "web-vitals": "^2.1.4",
+    "@ggcs/core": "workspace:*",
+    "@ggcs/sensor-suite": "workspace:*"
   },
   "scripts": {
     "start": "react-scripts start",
@@ -75,7 +77,12 @@
     "example:m03:on-target": "node apps/examples/sensor-suite-shadow-on-target-proof/dist/index.js",
     "docker:m03:on-target": "pnpm run docker:m03:contract",
     "example:m03:contract": "node apps/examples/sensor-suite-shadow-on-target-proof/dist/index.js",
-    "docker:m03:contract": "docker compose --profile m03-contract up --build --abort-on-container-exit --exit-code-from m03-contract-proof m03-contract-proof"
+    "docker:m03:contract": "docker compose --profile m03-contract up --build --abort-on-container-exit --exit-code-from m03-contract-proof m03-contract-proof",
+    "build:m04:web": "CI=false react-scripts build",
+    "test:m04:web": "react-scripts test --watchAll=false --runInBand",
+    "check:m04-boundaries": "node scripts/check-m04-boundaries.mjs",
+    "verify:m04": "pnpm run verify:m03 && pnpm run build:m04:web && pnpm run test:m04:web && pnpm run check:m04-boundaries",
+    "docker:m04:verify": "docker compose --profile m04 run --rm --build m04-verify"
   },
   "eslintConfig": {
     "extends": [

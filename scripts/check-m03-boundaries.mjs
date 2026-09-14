@@ -5,6 +5,7 @@ const root = path.resolve(import.meta.dirname, "..");
 const transformsDir = path.join(root, "packages", "transforms");
 const rosStdMsgsDir = path.join(root, "packages", "ros-std-msgs");
 const arnavDir = path.join(root, "plugins", "arnav");
+const sensorSuiteDir = path.join(root, "packages", "sensor-suite");
 const shadowDir = path.join(root, "apps", "examples", "sensor-suite-shadow-headless");
 const liveProofDir = path.join(root, "apps", "examples", "sensor-suite-shadow-live-proof");
 const onTargetProofDir = path.join(root, "apps", "examples", "sensor-suite-shadow-on-target-proof");
@@ -42,6 +43,19 @@ requireAllowedDependencies(
   new Set(["@ggcs/plugin-sdk", "@ggcs/ros", "@ggcs/schema"]),
 );
 requireAllowedDependencies(
+  "@ggcs/sensor-suite",
+  sensorSuiteDir,
+  new Set([
+    "@ggcs/arnav",
+    "@ggcs/core",
+    "@ggcs/ros",
+    "@ggcs/ros-std-msgs",
+    "@ggcs/schema",
+    "@ggcs/transforms",
+    "@ggcs/transport-rosbridge",
+  ]),
+);
+requireAllowedDependencies(
   "sensor-suite-shadow-headless",
   shadowDir,
   new Set([
@@ -52,6 +66,7 @@ requireAllowedDependencies(
     "@ggcs/schema",
     "@ggcs/transforms",
     "@ggcs/transport-rosbridge",
+    "@ggcs/sensor-suite",
   ]),
 );
 requireAllowedDependencies(
@@ -114,6 +129,10 @@ scan(arnavDir, {
   forbiddenImports: ["@ggcs/transport-rosbridge", "roslib", ...uiImports],
   forbiddenTokens: ["window.", "document.", "navigator.", "/ArdicLabs/Arnav/Gnss_Ins_data"],
 });
+scan(sensorSuiteDir, {
+  forbiddenImports: uiImports,
+  forbiddenTokens: ["window.", "document.", "navigator.", "localStorage", "../src/middleware", "../src/config"],
+});
 scan(shadowDir, {
   forbiddenImports: uiImports,
   forbiddenTokens: ["window.", "document.", "navigator.", "localStorage", "../src/middleware", "../src/config"],
@@ -168,7 +187,7 @@ for (const sideEffectProvider of ["topicCommand", "serviceProcedure"]) {
   }
 }
 
-const definitionSource = fs.readFileSync(path.join(shadowDir, "src", "definition.ts"), "utf8");
+const definitionSource = fs.readFileSync(path.join(sensorSuiteDir, "src", "definition.ts"), "utf8");
 for (const sideEffectProvider of ["topicCommand"]) {
   if (definitionSource.includes(`ROSBRIDGE_PROVIDER_IDS.${sideEffectProvider}`)) {
     violations.push(`shadow definition references forbidden side-effect provider ${sideEffectProvider}`);
@@ -179,6 +198,7 @@ for (const [label, directory] of [
   ["@ggcs/transforms", transformsDir],
   ["@ggcs/ros-std-msgs", rosStdMsgsDir],
   ["@ggcs/arnav", arnavDir],
+  ["@ggcs/sensor-suite", sensorSuiteDir],
 ]) {
   if (!readPackage(directory).exports?.["."]) {
     violations.push(`${label} must expose a top-level package export`);
