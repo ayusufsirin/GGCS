@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useAttr } from "../middleware/hooks/use-attr";
-import { Property } from "csstype";
 
 // Minimal ROS 2 diagnostics types (only what we need)
 type KeyValue = { key: string; value: string };
@@ -36,7 +35,7 @@ export function DiagnosticsWidget(props: Props) {
 
   // Keep last-seen maps per diagnostic name: name -> (key -> value)
   const [byName, setByName] = useState<Record<string, Record<string, string>>>({});
-  const [levelColor, setLevelColorColor] = useState<Property.Color>("grey");
+  const [levelColor, setLevelColorColor] = useState<React.CSSProperties["color"]>("grey");
   const [summary, setSummary] = useState<string>("No diagnostics received yet");
 
   useEffect(() => {
