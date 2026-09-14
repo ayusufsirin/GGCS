@@ -62,12 +62,23 @@ describe("Sensor Suite Web application lifecycle", () => {
     expect(runtime.stops).toBe(1);
   });
 
-  test("compat-read/full fail closed before creating transport state in S1", () => {
-    const createRuntime = jest.fn(() => new FakeRuntime());
-    expect(() => createSensorSuiteWebApplication(
-      { mode: "compat-read", rosbridgeUrl: "ws://unused.invalid:9090" },
+  test("compat-read owns one Runtime while compat-full remains gated", async () => {
+    const runtime = new FakeRuntime();
+    const createRuntime = jest.fn(() => runtime);
+    const app = createSensorSuiteWebApplication(
+      { mode: "compat-read", rosbridgeUrl: "ws://compat.invalid:9090" },
       { createRuntime },
-    )).toThrow(/not enabled in M04-S1/);
-    expect(createRuntime).not.toHaveBeenCalled();
+    );
+
+    await app.start();
+    expect(createRuntime).toHaveBeenCalledTimes(1);
+    expect(runtime.starts).toBe(1);
+    expect(app.compatibility.runtimeState()).toBe("running");
+    await app.stop();
+
+    expect(() => createSensorSuiteWebApplication(
+      { mode: "compat-full", rosbridgeUrl: "ws://unused.invalid:9090" },
+      { createRuntime },
+    )).toThrow(/not enabled in M04-S2/);
   });
 });

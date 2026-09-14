@@ -25,6 +25,8 @@ jest.mock("@ggcs/sensor-suite", () => ({
 }));
 
 import {
+  M04_SLICE_2_RUNTIME_READ_TARGET,
+  isM04Slice2RuntimeReadPort,
   resolveCompatibilityBinding,
   resolveCompatibilityCapability,
 } from "./compatibility-map";
@@ -49,5 +51,24 @@ describe("M04 compatibility binding map", () => {
       kind: "parameterProvider",
       resourceId: "shadow.parameters",
     });
+  });
+
+  test("enables Runtime reads for exactly the first low-risk Status port in S2", () => {
+    expect(M04_SLICE_2_RUNTIME_READ_TARGET).toEqual({
+      instanceId: "tabs.items.home.grids.items.rtkSystemStatus",
+      portName: "status",
+    });
+    expect(isM04Slice2RuntimeReadPort(
+      M04_SLICE_2_RUNTIME_READ_TARGET.instanceId,
+      M04_SLICE_2_RUNTIME_READ_TARGET.portName,
+    )).toBe(true);
+    expect(isM04Slice2RuntimeReadPort(
+      "tabs.items.home.grids.items.rtkRollPitchStatus",
+      "status",
+    )).toBe(false);
+    expect(isM04Slice2RuntimeReadPort(
+      "tabs.items.home.grids.items.panel.tabs.items.gauges.grids.items.speed",
+      "value",
+    )).toBe(false);
   });
 });

@@ -33,15 +33,15 @@ export function backendUsesRuntimeForActions(mode: SensorSuiteBackendMode): bool
 }
 
 /**
- * M04-S1 exposes the complete mode vocabulary so rollout configuration is
- * stable, but only legacy and shadow are executable until the compatibility
- * hooks are introduced in later slices. Failing closed prevents a flag from
- * claiming authoritative cutover before the UI path actually moved.
+ * M04-S2 enables the first authoritative read-only compatibility path.
+ * compat-read is now executable, but compat-full remains gated until the
+ * Procedure/Command/Parameter cutovers land. Failing closed prevents a mode
+ * flag from silently claiming side-effect authority before those paths move.
  */
-export function assertM04Slice1ModeSupported(mode: SensorSuiteBackendMode): void {
-  if (mode === "compat-read" || mode === "compat-full") {
+export function assertM04Slice2ModeSupported(mode: SensorSuiteBackendMode): void {
+  if (mode === "compat-full") {
     throw new Error(
-      `GGCS backend mode ${mode} is reserved but not enabled in M04-S1; use legacy or shadow until the compatibility hook cutover is implemented`,
+      `GGCS backend mode ${mode} is reserved but not enabled in M04-S2; use legacy, shadow, or compat-read until action cutover is implemented`,
     );
   }
 }

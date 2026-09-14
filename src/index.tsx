@@ -16,9 +16,9 @@ async function startWebApplication() {
     }),
   });
 
-  // In M04-S1, shadow Runtime failure must not take down the authoritative
-  // legacy UI. Future compat-read/full modes fail closed until their hooks are
-  // implemented rather than silently falling back mid-session.
+  // Shadow Runtime failure must not take down the authoritative legacy UI.
+  // compat-read is authoritative for its explicitly migrated S2 port, so its
+  // startup never silently falls back to legacy. compat-full remains gated.
   try {
     await application.start();
   } catch (error) {

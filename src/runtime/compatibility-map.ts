@@ -89,6 +89,18 @@ export const SENSOR_SUITE_COMPATIBILITY_BINDINGS: CompatibilityBindingMap = {
   },
 };
 
+export const M04_SLICE_2_RUNTIME_READ_TARGET = {
+  instanceId: "tabs.items.home.grids.items.rtkSystemStatus",
+  portName: "status",
+} as const;
+
+export function isM04Slice2RuntimeReadPort(instanceId: string, portName: string): boolean {
+  return (
+    instanceId === M04_SLICE_2_RUNTIME_READ_TARGET.instanceId &&
+    portName === M04_SLICE_2_RUNTIME_READ_TARGET.portName
+  );
+}
+
 export function resolveCompatibilityBinding(
   instanceId: string,
   portName: string,

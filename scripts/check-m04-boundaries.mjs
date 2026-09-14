@@ -38,8 +38,11 @@ if (!backendMode.includes('return "legacy"')) {
 for (const mode of ["legacy", "shadow", "compat-read", "compat-full"]) {
   if (!backendMode.includes(`"${mode}"`)) violations.push(`M04 backend vocabulary is missing ${mode}`);
 }
-if (!backendMode.includes("assertM04Slice1ModeSupported")) {
-  violations.push("M04-S1 must fail closed for authoritative compatibility modes not implemented yet");
+if (!backendMode.includes("assertM04Slice2ModeSupported")) {
+  violations.push("M04-S2 must explicitly gate unsupported compatibility modes");
+}
+if (!backendMode.includes('if (mode === "compat-full")')) {
+  violations.push("M04-S2 must keep compat-full fail-closed while enabling compat-read");
 }
 
 for (const forbidden of [
@@ -89,22 +92,38 @@ if (!index.includes("root.unmount()") || !index.includes("application.stop()")) 
   violations.push("browser application shell must detach React before stopping the Runtime");
 }
 if (!index.includes("mode !== 'shadow'")) {
-  violations.push("shadow Runtime startup failure must not take down the authoritative legacy UI in S1");
+  violations.push("shadow Runtime startup failure must not take down the authoritative legacy UI");
 }
 
-// S1 must attach infrastructure only. Legacy hooks/binders remain authoritative
-// until S2/S3 and therefore serve as an explicit regression guard here.
+// S2 cuts over one read-only widget instance only. The legacy binder/store remain
+// available for every other widget until the broader S3 telemetry cutover.
 if (!dashboard.includes("useAttachAllBindings(config)")) {
-  violations.push("M04-S1 unexpectedly disabled the legacy binder before read cutover");
+  violations.push("M04-S2 unexpectedly disabled the legacy binder before complete telemetry cutover");
 }
 if (!useAttr.includes("instanceStore")) {
-  violations.push("M04-S1 unexpectedly made useAttr authoritative before S2");
+  violations.push("M04-S2 must retain legacy instanceStore rollback/non-migrated reads");
+}
+if (!useAttr.includes("useRuntimeCompatibility") || !useAttr.includes("resourceForPort") || !useAttr.includes(".subscribe(")) {
+  violations.push("M04-S2 useAttr must project semantic Runtime Source observations");
+}
+for (const forbidden of ["ROSLIB", "roslib", "new ROSLIB.Topic", "/ArdicLabs/"]) {
+  if (useAttr.includes(forbidden)) {
+    violations.push(`M04-S2 useAttr must not create/discover transport state: ${forbidden}`);
+  }
+}
+if (!compatibilityMap.includes("M04_SLICE_2_RUNTIME_READ_TARGET") ||
+    !compatibilityMap.includes('instanceId: "tabs.items.home.grids.items.rtkSystemStatus"') ||
+    !compatibilityMap.includes('portName: "status"')) {
+  violations.push("M04-S2 must explicitly identify exactly one low-risk Status read target");
+}
+if (!compatibilityMap.includes("isM04Slice2RuntimeReadPort")) {
+  violations.push("M04-S2 must gate Runtime telemetry authority by explicit migration target");
 }
 if (!useService.includes("serviceBus")) {
-  violations.push("M04-S1 unexpectedly cut over services before S4");
+  violations.push("M04-S2 unexpectedly cut over services before S4");
 }
 if (!usePublisher.includes("publisherBus")) {
-  violations.push("M04-S1 unexpectedly cut over publishers");
+  violations.push("M04-S2 unexpectedly cut over publishers");
 }
 if (!rosConn.includes("resolveRosbridgeUrl")) {
   violations.push("legacy ROSLIB and new Runtime must share Web endpoint selection semantics");
@@ -114,5 +133,5 @@ if (violations.length > 0) {
   for (const violation of violations) console.error(`M04 boundary violation: ${violation}`);
   process.exitCode = 1;
 } else {
-  console.log("M04 React compatibility/runtime attachment boundaries: PASS");
+  console.log("M04 React compatibility/runtime cutover boundaries: PASS");
 }
