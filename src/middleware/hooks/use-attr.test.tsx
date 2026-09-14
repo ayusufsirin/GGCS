@@ -46,7 +46,7 @@ class FakeSource<T> implements Source<T> {
 
   publish(observation: Observation<T>): void {
     this.observation = observation;
-    for (const listener of [...this.listeners]) listener(observation);
+    this.listeners.forEach((listener) => listener(observation));
   }
 
   get activeListeners(): number {
