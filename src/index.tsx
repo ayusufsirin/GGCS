@@ -17,7 +17,7 @@ async function startWebApplication() {
   });
 
   // Shadow Runtime failure must not take down the authoritative legacy UI.
-  // compat-read is authoritative for its explicitly migrated S2 port, so its
+  // compat-read is authoritative for the mapped S3 telemetry ports, so its
   // startup never silently falls back to legacy. compat-full remains gated.
   try {
     await application.start();

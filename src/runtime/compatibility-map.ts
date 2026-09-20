@@ -89,16 +89,14 @@ export const SENSOR_SUITE_COMPATIBILITY_BINDINGS: CompatibilityBindingMap = {
   },
 };
 
-export const M04_SLICE_2_RUNTIME_READ_TARGET = {
-  instanceId: "tabs.items.home.grids.items.rtkSystemStatus",
-  portName: "status",
-} as const;
-
-export function isM04Slice2RuntimeReadPort(instanceId: string, portName: string): boolean {
-  return (
-    instanceId === M04_SLICE_2_RUNTIME_READ_TARGET.instanceId &&
-    portName === M04_SLICE_2_RUNTIME_READ_TARGET.portName
-  );
+/**
+ * M04-S3 makes every explicitly mapped semantic Source port authoritative in
+ * compat-read. Procedure and ParameterProvider bindings remain reserved for
+ * later slices, and the camera is intentionally absent so its legacy
+ * subscription can remain as the documented opt-in exception.
+ */
+export function isM04Slice3RuntimeReadPort(instanceId: string, portName: string): boolean {
+  return resolveCompatibilityBinding(instanceId, portName)?.kind === "source";
 }
 
 export function resolveCompatibilityBinding(

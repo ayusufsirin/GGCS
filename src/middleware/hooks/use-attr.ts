@@ -3,7 +3,7 @@ import type { Observation, Source } from "@ggcs/core";
 import { instanceStore } from "../instance-store";
 import { Ctx } from "./common";
 import { backendUsesRuntimeForTelemetry } from "../../runtime/backend-mode";
-import { isM04Slice2RuntimeReadPort } from "../../runtime/compatibility-map";
+import { isM04Slice3RuntimeReadPort } from "../../runtime/compatibility-map";
 import { useRuntimeCompatibility } from "../../runtime/compatibility-context";
 
 /**
@@ -31,7 +31,7 @@ export function useAttr<T = any>(attrName: string, initial?: T) {
   const runtimeCompatibility = useRuntimeCompatibility();
   const runtimeRead =
     backendUsesRuntimeForTelemetry(runtimeCompatibility.mode) &&
-    isM04Slice2RuntimeReadPort(ctx.instanceId, attrName);
+    isM04Slice3RuntimeReadPort(ctx.instanceId, attrName);
 
   const runtimeSource = runtimeRead
     ? runtimeCompatibility.resourceForPort<Source<T>>(ctx.instanceId, attrName)

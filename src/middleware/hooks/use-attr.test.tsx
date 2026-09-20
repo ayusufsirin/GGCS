@@ -4,7 +4,6 @@ import { RuntimeError, type Observation, type Source, type Subscription } from "
 import { instanceStore } from "../instance-store";
 import { RuntimeCompatibilityProvider } from "../../runtime/compatibility-context";
 import {
-  M04_SLICE_2_RUNTIME_READ_TARGET,
   resolveCompatibilityBinding,
   resolveCompatibilityCapability,
 } from "../../runtime/compatibility-map";
@@ -12,6 +11,11 @@ import type { SensorSuiteCompatibilityAccess } from "../../runtime/sensor-suite-
 import { StatusWidget } from "../../widgets/StatusWidget";
 import { WidgetAttrProvider } from "./common";
 import { useAttr } from "./use-attr";
+
+const SYSTEM_STATUS = {
+  instanceId: "tabs.items.home.grids.items.rtkSystemStatus",
+  portName: "status",
+} as const;
 
 class FakeSource<T> implements Source<T> {
   readonly kind = "source" as const;
@@ -75,25 +79,33 @@ function compatibilityAccess<T>(
 
 function RuntimeProbe({
   testId,
+  portName,
   initial,
 }: {
   testId: string;
+  portName: string;
   initial?: number;
 }) {
-  const value = useAttr<number>(M04_SLICE_2_RUNTIME_READ_TARGET.portName, initial);
+  const value = useAttr<number>(portName, initial);
   return <span data-testid={testId}>{value === undefined ? "undefined" : String(value)}</span>;
 }
 
 function renderRuntimeProbe(
   source: FakeSource<number>,
-  options: { initial?: number; instanceId?: string; mode?: SensorSuiteCompatibilityAccess["mode"] } = {},
+  options: {
+    initial?: number;
+    instanceId?: string;
+    portName?: string;
+    mode?: SensorSuiteCompatibilityAccess["mode"];
+  } = {},
 ) {
-  const instanceId = options.instanceId ?? M04_SLICE_2_RUNTIME_READ_TARGET.instanceId;
+  const instanceId = options.instanceId ?? SYSTEM_STATUS.instanceId;
+  const portName = options.portName ?? SYSTEM_STATUS.portName;
   const access = compatibilityAccess(source, options.mode ?? "compat-read");
   return render(
     <RuntimeCompatibilityProvider access={access}>
       <WidgetAttrProvider instanceId={instanceId}>
-        <RuntimeProbe testId="value" initial={options.initial} />
+        <RuntimeProbe testId="value" portName={portName} initial={options.initial} />
       </WidgetAttrProvider>
     </RuntimeCompatibilityProvider>,
   );
@@ -105,7 +117,7 @@ const error = new RuntimeError({
   message: "test source failed",
 });
 
-describe("M04-S2 useAttr compatibility projection", () => {
+describe("M04-S3 useAttr compatibility projection", () => {
   test("projects unavailable/fresh/stale/error observations into the legacy value shape", () => {
     const source = new FakeSource<number>({ state: "unavailable", since: 1 });
     renderRuntimeProbe(source, { initial: 5 });
@@ -128,14 +140,14 @@ describe("M04-S2 useAttr compatibility projection", () => {
     expect(screen.getByTestId("value")).toHaveTextContent("5");
   });
 
-  test("compat-read fails closed when the selected Runtime Source is unavailable", () => {
+  test("compat-read fails closed when a mapped Runtime Source is unavailable", () => {
     const access = compatibilityAccess<number>(undefined);
     const consoleError = jest.spyOn(console, "error").mockImplementation(() => undefined);
     try {
       expect(() => render(
         <RuntimeCompatibilityProvider access={access}>
-          <WidgetAttrProvider instanceId={M04_SLICE_2_RUNTIME_READ_TARGET.instanceId}>
-            <RuntimeProbe testId="missing" />
+          <WidgetAttrProvider instanceId={SYSTEM_STATUS.instanceId}>
+            <RuntimeProbe testId="missing" portName={SYSTEM_STATUS.portName} />
           </WidgetAttrProvider>
         </RuntimeCompatibilityProvider>,
       )).toThrow(/compat-read source unavailable/);
@@ -154,7 +166,6 @@ describe("M04-S2 useAttr compatibility projection", () => {
     expect(source.unsubscriptions).toBe(1);
     expect(source.activeListeners).toBe(0);
 
-    // The Source remains usable after the widget subscription goes away.
     expect(() => source.publish({ state: "fresh", value: 2, updatedAt: 2 })).not.toThrow();
     expect(source.current()).toMatchObject({ state: "fresh", value: 2 });
   });
@@ -167,12 +178,12 @@ describe("M04-S2 useAttr compatibility projection", () => {
       return (
         <RuntimeCompatibilityProvider access={access}>
           {showFirst ? (
-            <WidgetAttrProvider instanceId={M04_SLICE_2_RUNTIME_READ_TARGET.instanceId}>
-              <RuntimeProbe testId="first" />
+            <WidgetAttrProvider instanceId={SYSTEM_STATUS.instanceId}>
+              <RuntimeProbe testId="first" portName={SYSTEM_STATUS.portName} />
             </WidgetAttrProvider>
           ) : null}
-          <WidgetAttrProvider instanceId={M04_SLICE_2_RUNTIME_READ_TARGET.instanceId}>
-            <RuntimeProbe testId="second" />
+          <WidgetAttrProvider instanceId={SYSTEM_STATUS.instanceId}>
+            <RuntimeProbe testId="second" portName={SYSTEM_STATUS.portName} />
           </WidgetAttrProvider>
         </RuntimeCompatibilityProvider>
       );
@@ -192,22 +203,39 @@ describe("M04-S2 useAttr compatibility projection", () => {
     expect(screen.getByTestId("second")).toHaveTextContent("12");
   });
 
-  test("compat-read cuts over exactly the selected Status instance while other widgets remain legacy", () => {
+  test("compat-read routes representative Status/Gauge/HUD/Map ports through Runtime", () => {
+    const ports = [
+      { instanceId: "tabs.items.home.grids.items.rtkRollPitchStatus", portName: "status" },
+      { instanceId: "tabs.items.home.grids.items.panel.tabs.items.gauges.grids.items.speed", portName: "value" },
+      { instanceId: "tabs.items.home.grids.items.hud", portName: "roll" },
+      { instanceId: "tabs.items.home.grids.items.map", portName: "latitude" },
+    ];
+
+    ports.forEach(({ instanceId, portName }, index) => {
+      const source = new FakeSource<number>({ state: "fresh", value: index + 1, updatedAt: 1 });
+      const view = renderRuntimeProbe(source, { instanceId, portName });
+      expect(source.subscriptions).toBe(1);
+      expect(screen.getByTestId("value")).toHaveTextContent(String(index + 1));
+      view.unmount();
+    });
+  });
+
+  test("unmapped camera reads remain legacy in compat-read", () => {
     const source = new FakeSource<number>({ state: "fresh", value: 99, updatedAt: 1 });
-    const legacyInstance = "tabs.items.home.grids.items.rtkRollPitchStatus";
-    renderRuntimeProbe(source, { initial: 1, instanceId: legacyInstance });
+    const cameraInstance = "tabs.items.images.grids.items.zedRgb";
+    renderRuntimeProbe(source, { initial: 1, instanceId: cameraInstance, portName: "image" });
 
     expect(source.subscriptions).toBe(0);
     expect(screen.getByTestId("value")).toHaveTextContent("1");
 
-    act(() => instanceStore.emit(legacyInstance, M04_SLICE_2_RUNTIME_READ_TARGET.portName, 7));
+    act(() => instanceStore.emit(cameraInstance, "image", 7));
     expect(screen.getByTestId("value")).toHaveTextContent("7");
   });
 
-  test("legacy mode remains an explicit rollback path for the selected widget", () => {
+  test("legacy mode remains an explicit rollback path for migrated telemetry", () => {
     const source = new FakeSource<boolean>({ state: "fresh", value: true, updatedAt: 1 });
     const access = compatibilityAccess(source, "legacy");
-    const instanceId = M04_SLICE_2_RUNTIME_READ_TARGET.instanceId;
+    const instanceId = SYSTEM_STATUS.instanceId;
 
     render(
       <RuntimeCompatibilityProvider access={access}>
@@ -230,13 +258,13 @@ describe("M04-S2 useAttr compatibility projection", () => {
     expect(screen.getByText("ERR")).toBeInTheDocument();
   });
 
-  test("the selected Status widget renders directly from the Runtime Source in compat-read", () => {
+  test("the Status widget renders directly from the Runtime Source in compat-read", () => {
     const source = new FakeSource<boolean>({ state: "fresh", value: true, updatedAt: 1 });
     const access = compatibilityAccess(source);
 
     render(
       <RuntimeCompatibilityProvider access={access}>
-        <WidgetAttrProvider instanceId={M04_SLICE_2_RUNTIME_READ_TARGET.instanceId}>
+        <WidgetAttrProvider instanceId={SYSTEM_STATUS.instanceId}>
           <StatusWidget
             label="System"
             kind="boolean"

@@ -3,9 +3,12 @@ import { attachServiceBindings, collectServiceBindings } from "./binders/service
 import { attachConstantBindings, collectConstantBindings } from "./binders/constants";
 import { attachPublisherBindings, collectPublisherBindings } from "./binders/publishers";
 import { useEffect } from "react";
+import { useRuntimeCompatibility } from "../runtime/compatibility-context";
+import type { SensorSuiteBackendMode } from "../runtime/backend-mode";
+import { filterLegacySubscriberBindingsForMode } from "../runtime/telemetry-cutover";
 
-function attachAllBindings(config: unknown) {
-  const topics = collectSubscriberBindings(config);
+export function attachAllBindingsForMode(config: unknown, mode: SensorSuiteBackendMode) {
+  const topics = filterLegacySubscriberBindingsForMode(mode, collectSubscriberBindings(config));
   const services = collectServiceBindings(config);
   const constants = collectConstantBindings(config);
   const publishers = collectPublisherBindings(config);
@@ -24,8 +27,10 @@ function attachAllBindings(config: unknown) {
 }
 
 export function useAttachAllBindings(config: unknown) {
+  const { mode } = useRuntimeCompatibility();
+
   useEffect(() => {
-    const off = attachAllBindings(config);
+    const off = attachAllBindingsForMode(config, mode);
     return () => off();
-  }, [config]);
+  }, [config, mode]);
 }

@@ -25,18 +25,29 @@ jest.mock("@ggcs/sensor-suite", () => ({
 }));
 
 import {
-  M04_SLICE_2_RUNTIME_READ_TARGET,
-  isM04Slice2RuntimeReadPort,
+  isM04Slice3RuntimeReadPort,
   resolveCompatibilityBinding,
   resolveCompatibilityCapability,
 } from "./compatibility-map";
 
 describe("M04 compatibility binding map", () => {
-  test("maps a low-risk Gauge port to the semantic Runtime Source", () => {
+  test("maps Status/Gauge/HUD/Map telemetry ports to semantic Runtime Sources", () => {
     expect(resolveCompatibilityBinding(
       "tabs.items.home.grids.items.panel.tabs.items.gauges.grids.items.speed",
       "value",
     )).toEqual({ kind: "source", resourceId: "vehicle.speed" });
+    expect(resolveCompatibilityBinding(
+      "tabs.items.home.grids.items.hud",
+      "roll",
+    )).toEqual({ kind: "source", resourceId: "nav.roll.deg" });
+    expect(resolveCompatibilityBinding(
+      "tabs.items.home.grids.items.map",
+      "latitude",
+    )).toEqual({ kind: "source", resourceId: "nav.latitude.deg" });
+    expect(resolveCompatibilityBinding(
+      "tabs.items.home.grids.items.rtkRollPitchStatus",
+      "status",
+    )).toEqual({ kind: "source", resourceId: "arnav.health.rollPitch" });
   });
 
   test("maps existing recording call sites to Procedures without service names", () => {
@@ -53,22 +64,26 @@ describe("M04 compatibility binding map", () => {
     });
   });
 
-  test("enables Runtime reads for exactly the first low-risk Status port in S2", () => {
-    expect(M04_SLICE_2_RUNTIME_READ_TARGET).toEqual({
-      instanceId: "tabs.items.home.grids.items.rtkSystemStatus",
-      portName: "status",
-    });
-    expect(isM04Slice2RuntimeReadPort(
-      M04_SLICE_2_RUNTIME_READ_TARGET.instanceId,
-      M04_SLICE_2_RUNTIME_READ_TARGET.portName,
+  test("S3 Runtime telemetry authority follows every explicit Source binding only", () => {
+    expect(isM04Slice3RuntimeReadPort(
+      "tabs.items.home.grids.items.rtkSystemStatus",
+      "status",
     )).toBe(true);
-    expect(isM04Slice2RuntimeReadPort(
+    expect(isM04Slice3RuntimeReadPort(
       "tabs.items.home.grids.items.rtkRollPitchStatus",
       "status",
-    )).toBe(false);
-    expect(isM04Slice2RuntimeReadPort(
+    )).toBe(true);
+    expect(isM04Slice3RuntimeReadPort(
       "tabs.items.home.grids.items.panel.tabs.items.gauges.grids.items.speed",
       "value",
+    )).toBe(true);
+    expect(isM04Slice3RuntimeReadPort(
+      "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.bagStartRecord",
+      "callService",
+    )).toBe(false);
+    expect(isM04Slice3RuntimeReadPort(
+      "tabs.items.images.grids.items.zedRgb",
+      "image",
     )).toBe(false);
   });
 });
