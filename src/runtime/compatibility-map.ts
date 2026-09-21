@@ -99,6 +99,21 @@ export function isM04Slice3RuntimeReadPort(instanceId: string, portName: string)
   return resolveCompatibilityBinding(instanceId, portName)?.kind === "source";
 }
 
+const M04_SLICE4_RUNTIME_PROCEDURE_PORTS = new Set([
+  "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.bagStopRecord::callService",
+]);
+
+/**
+ * M04-S4 migrates recording actions one at a time. Candidate 1 enables only
+ * Stop ROS Bag; the other pre-mapped Procedures stay legacy until their own
+ * verified expansion step.
+ */
+export function isM04Slice4RuntimeProcedurePort(instanceId: string, portName: string): boolean {
+  const binding = resolveCompatibilityBinding(instanceId, portName);
+  return binding?.kind === "procedure" &&
+    M04_SLICE4_RUNTIME_PROCEDURE_PORTS.has(`${instanceId}::${portName}`);
+}
+
 export function resolveCompatibilityBinding(
   instanceId: string,
   portName: string,

@@ -1,5 +1,5 @@
 import {
-  assertM04Slice3ModeSupported,
+  assertM04Slice4ModeSupported,
   backendStartsRuntime,
   parseSensorSuiteBackendMode,
 } from "./backend-mode";
@@ -14,17 +14,17 @@ describe("M04 backend mode", () => {
   test("shadow starts the Runtime without claiming UI authority", () => {
     expect(parseSensorSuiteBackendMode("shadow")).toBe("shadow");
     expect(backendStartsRuntime("shadow")).toBe(true);
-    expect(() => assertM04Slice3ModeSupported("shadow")).not.toThrow();
+    expect(() => assertM04Slice4ModeSupported("shadow")).not.toThrow();
   });
 
-  test("compat-read is enabled for the complete telemetry cutover", () => {
+  test("compat-read is enabled for telemetry plus separately cut-over recording Procedures", () => {
     expect(parseSensorSuiteBackendMode("compat-read")).toBe("compat-read");
     expect(backendStartsRuntime("compat-read")).toBe(true);
-    expect(() => assertM04Slice3ModeSupported("compat-read")).not.toThrow();
+    expect(() => assertM04Slice4ModeSupported("compat-read")).not.toThrow();
   });
 
-  test("compat-full still fails closed until side-effect paths move", () => {
-    expect(() => assertM04Slice3ModeSupported("compat-full")).toThrow(/not enabled in M04-S3/);
+  test("compat-full still fails closed until parameter and compatibility closure slices land", () => {
+    expect(() => assertM04Slice4ModeSupported("compat-full")).toThrow(/not enabled in M04-S4/);
   });
 
   test("invalid configuration never silently falls back", () => {

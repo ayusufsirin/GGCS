@@ -26,6 +26,7 @@ jest.mock("@ggcs/sensor-suite", () => ({
 
 import {
   isM04Slice3RuntimeReadPort,
+  isM04Slice4RuntimeProcedurePort,
   resolveCompatibilityBinding,
   resolveCompatibilityCapability,
 } from "./compatibility-map";
@@ -86,4 +87,19 @@ describe("M04 compatibility binding map", () => {
       "image",
     )).toBe(false);
   });
+  test("S4 candidate 1 enables only Stop ROS Bag while later recording Procedures stay legacy", () => {
+    expect(isM04Slice4RuntimeProcedurePort(
+      "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.bagStopRecord",
+      "callService",
+    )).toBe(true);
+    [
+      "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.bagStartRecord",
+      "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.zedStartSvo",
+      "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.zedStopSvo",
+    ].forEach((instanceId) => {
+      expect(isM04Slice4RuntimeProcedurePort(instanceId, "callService")).toBe(false);
+    });
+    expect(isM04Slice4RuntimeProcedurePort("tabs.items.rosParameters", "listNodes")).toBe(false);
+  });
+
 });

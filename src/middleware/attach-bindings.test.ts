@@ -39,10 +39,29 @@ const subscriberBindings = [
   },
 ];
 
+const serviceBindings = [
+  {
+    instanceId: "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.bagStopRecord",
+    attrName: "callService",
+    service: { name: "/legacy-bag-stop", type: "std_srvs/srv/Trigger" },
+  },
+  {
+    instanceId: "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.bagStartRecord",
+    attrName: "callService",
+    service: { name: "/legacy-bag-start", type: "std_srvs/srv/Trigger" },
+  },
+  {
+    instanceId: "tabs.items.rosParameters",
+    attrName: "listNodes",
+    service: { name: "/rosapi/nodes", type: "rosapi/Nodes" },
+  },
+];
+
+
 beforeEach(() => {
   jest.clearAllMocks();
   (collectSubscriberBindings as jest.Mock).mockReturnValue(subscriberBindings);
-  (collectServiceBindings as jest.Mock).mockReturnValue(["service"]);
+  (collectServiceBindings as jest.Mock).mockReturnValue(serviceBindings);
   (collectConstantBindings as jest.Mock).mockReturnValue(["constant"]);
   (collectPublisherBindings as jest.Mock).mockReturnValue(["publisher"]);
   (attachSubscriberBindings as jest.Mock).mockReturnValue(jest.fn());
@@ -51,18 +70,19 @@ beforeEach(() => {
   (attachPublisherBindings as jest.Mock).mockReturnValue(jest.fn());
 });
 
-describe("M04-S3 legacy binding attachment", () => {
-  test("compat-read removes Runtime-migrated telemetry but keeps the camera exception and action paths", () => {
+describe("M04-S4 legacy binding attachment", () => {
+  test("compat-read removes migrated telemetry and recording Procedures while keeping camera and rosapi exceptions", () => {
     attachAllBindingsForMode({}, "compat-read");
 
     expect(attachSubscriberBindings).toHaveBeenCalledWith([subscriberBindings[1]]);
-    expect(attachServiceBindings).toHaveBeenCalledWith(["service"]);
+    expect(attachServiceBindings).toHaveBeenCalledWith([serviceBindings[1], serviceBindings[2]]);
     expect(attachConstantBindings).toHaveBeenCalledWith(["constant"]);
     expect(attachPublisherBindings).toHaveBeenCalledWith(["publisher"]);
   });
 
-  test("legacy mode keeps the complete subscriber set for restart-based rollback", () => {
+  test("legacy mode keeps complete subscriber and service sets for restart-based rollback", () => {
     attachAllBindingsForMode({}, "legacy");
     expect(attachSubscriberBindings).toHaveBeenCalledWith(subscriberBindings);
+    expect(attachServiceBindings).toHaveBeenCalledWith(serviceBindings);
   });
 });

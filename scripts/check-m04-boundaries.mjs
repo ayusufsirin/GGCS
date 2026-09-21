@@ -15,6 +15,7 @@ const index = read("src/index.tsx");
 const dashboard = read("src/bootstrap.tsx");
 const attachBindings = read("src/middleware/attach-bindings.ts");
 const telemetryCutover = read("src/runtime/telemetry-cutover.ts");
+const actionCutover = read("src/runtime/action-cutover.ts");
 const useAttr = read("src/middleware/hooks/use-attr.ts");
 const useService = read("src/middleware/hooks/use-service.ts");
 const usePublisher = read("src/middleware/hooks/use-publisher.ts");
@@ -40,11 +41,14 @@ if (!backendMode.includes('return "legacy"')) {
 for (const mode of ["legacy", "shadow", "compat-read", "compat-full"]) {
   if (!backendMode.includes(`"${mode}"`)) violations.push(`M04 backend vocabulary is missing ${mode}`);
 }
-if (!backendMode.includes("assertM04Slice3ModeSupported")) {
-  violations.push("M04-S3 must explicitly gate unsupported compatibility modes");
+if (!backendMode.includes("assertM04Slice4ModeSupported")) {
+  violations.push("M04-S4 must explicitly gate unsupported compatibility modes");
 }
 if (!backendMode.includes('if (mode === "compat-full")')) {
-  violations.push("M04-S3 must keep compat-full fail-closed while enabling compat-read");
+  violations.push("M04-S4 must keep compat-full fail-closed until later closure slices");
+}
+if (!backendMode.includes('mode === "compat-read" || mode === "compat-full"')) {
+  violations.push("M04-S4 must separately enable mapped recording actions in compat-read");
 }
 
 for (const forbidden of [
@@ -97,19 +101,22 @@ if (!index.includes("mode !== 'shadow'")) {
   violations.push("shadow Runtime startup failure must not take down the authoritative legacy UI");
 }
 
-// S3 makes every explicitly mapped low-bandwidth Source port authoritative in
-// compat-read. The legacy binding shell stays in place for rollback and later
-// action slices, while its subscriber ownership is filtered down to unmapped
-// exceptions (currently the camera).
+// S4 retains S3 telemetry authority and separately moves the four recording
+// Procedures to Runtime ownership in compat-read. Legacy service ownership is
+// retained only for unmigrated services (currently rosapi parameter access),
+// while legacy mode remains restart-based rollback.
 if (!dashboard.includes("useAttachAllBindings(config)")) {
   violations.push("M04-S3 must retain the compatibility binding shell for rollback and later action slices");
 }
 if (!attachBindings.includes("filterLegacySubscriberBindingsForMode")) {
-  violations.push("M04-S3 must filter migrated telemetry out of the legacy subscriber binder");
+  violations.push("M04-S4 must retain S3 telemetry filtering");
+}
+if (!attachBindings.includes("filterLegacyServiceBindingsForMode")) {
+  violations.push("M04-S4 must remove migrated Procedures from the legacy service binder");
 }
 for (const legacyBinder of ["attachServiceBindings", "attachConstantBindings", "attachPublisherBindings"]) {
   if (!attachBindings.includes(legacyBinder)) {
-    violations.push(`M04-S3 must leave non-telemetry legacy binding path intact: ${legacyBinder}`);
+    violations.push(`M04-S4 must retain the remaining compatibility binder path: ${legacyBinder}`);
   }
 }
 if (!telemetryCutover.includes("isM04Slice3RuntimeReadPort")) {
@@ -133,11 +140,29 @@ if (!compatibilityMap.includes("isM04Slice3RuntimeReadPort") ||
 if (compatibilityMap.includes("cameraZedRgbRaw")) {
   violations.push("M04-S3 must not silently cut over camera before its compatibility Source is proven");
 }
+if (!actionCutover.includes("isM04Slice4RuntimeProcedurePort") ||
+    !actionCutover.includes("backendUsesRuntimeForActions")) {
+  violations.push("M04-S4 legacy service filtering must use explicit Procedure bindings and backend policy");
+}
+if (!compatibilityMap.includes("isM04Slice4RuntimeProcedurePort") ||
+    !compatibilityMap.includes('?.kind === "procedure"')) {
+  violations.push("M04-S4 must derive action authority from explicit semantic Procedure bindings");
+}
+if (!useService.includes("useRuntimeCompatibility") ||
+    !useService.includes("resourceForPort") ||
+    !useService.includes(".invoke(req).result()")) {
+  violations.push("M04-S4 useServiceCall must invoke semantic Runtime Procedures");
+}
 if (!useService.includes("serviceBus")) {
-  violations.push("M04-S3 unexpectedly cut over services before S4");
+  violations.push("M04-S4 must retain legacy serviceBus for rollback and unmigrated rosapi services");
+}
+for (const forbidden of ["ROSLIB", "new ROSLIB.Service", "/zed/", "/bag_recorder/"]) {
+  if (useService.includes(forbidden)) {
+    violations.push(`M04-S4 useServiceCall must not create/discover transport state: ${forbidden}`);
+  }
 }
 if (!usePublisher.includes("publisherBus")) {
-  violations.push("M04-S3 unexpectedly cut over publishers");
+  violations.push("M04-S4 unexpectedly cut over publishers before their accepted slice");
 }
 if (!rosConn.includes("resolveRosbridgeUrl")) {
   violations.push("legacy ROSLIB and new Runtime must share Web endpoint selection semantics");

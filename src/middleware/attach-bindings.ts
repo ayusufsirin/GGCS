@@ -6,10 +6,11 @@ import { useEffect } from "react";
 import { useRuntimeCompatibility } from "../runtime/compatibility-context";
 import type { SensorSuiteBackendMode } from "../runtime/backend-mode";
 import { filterLegacySubscriberBindingsForMode } from "../runtime/telemetry-cutover";
+import { filterLegacyServiceBindingsForMode } from "../runtime/action-cutover";
 
 export function attachAllBindingsForMode(config: unknown, mode: SensorSuiteBackendMode) {
   const topics = filterLegacySubscriberBindingsForMode(mode, collectSubscriberBindings(config));
-  const services = collectServiceBindings(config);
+  const services = filterLegacyServiceBindingsForMode(mode, collectServiceBindings(config));
   const constants = collectConstantBindings(config);
   const publishers = collectPublisherBindings(config);
 

@@ -79,6 +79,6 @@ describe("Sensor Suite Web application lifecycle", () => {
     expect(() => createSensorSuiteWebApplication(
       { mode: "compat-full", rosbridgeUrl: "ws://unused.invalid:9090" },
       { createRuntime },
-    )).toThrow(/not enabled in M04-S3/);
+    )).toThrow(/not enabled in M04-S4/);
   });
 });
