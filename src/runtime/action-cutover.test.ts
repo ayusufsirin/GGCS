@@ -18,7 +18,7 @@ function collectServiceRefs(): ServiceRef[] {
 }
 
 describe("M04-S4 Procedure/action cutover policy", () => {
-  test("action 03 cuts over both ROS Bag Procedures plus Stop SVO and leaves Start SVO/rosapi legacy", () => {
+  test("action 04 cuts over all four recording Procedures and leaves only rosapi services legacy", () => {
     const services = collectServiceRefs();
     const runtimeActions = services.filter((binding) =>
       isM04Slice4RuntimeProcedurePort(binding.instanceId, binding.attrName));
@@ -26,8 +26,12 @@ describe("M04-S4 Procedure/action cutover policy", () => {
       !isM04Slice4RuntimeProcedurePort(binding.instanceId, binding.attrName));
 
     expect(services).toHaveLength(8);
-    expect(runtimeActions).toHaveLength(3);
+    expect(runtimeActions).toHaveLength(4);
     expect(runtimeActions).toEqual(expect.arrayContaining([
+      {
+        instanceId: "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.zedStartSvo",
+        attrName: "callService",
+      },
       {
         instanceId: "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.bagStartRecord",
         attrName: "callService",
@@ -41,20 +45,17 @@ describe("M04-S4 Procedure/action cutover policy", () => {
         attrName: "callService",
       },
     ]));
-    expect(legacyServices).toHaveLength(5);
-    expect(legacyServices).toContainEqual({
-      instanceId: "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.zedStartSvo",
-      attrName: "callService",
-    });
+    expect(legacyServices).toHaveLength(4);
     expect(legacyServices.filter((binding) => binding.instanceId === "tabs.items.rosParameters")).toHaveLength(4);
   });
 
-  test("legacy and shadow retain every service while compat-read removes the three verified recording actions", () => {
+  test("legacy and shadow retain every service while compat-read removes all four recording actions", () => {
     const services = collectServiceRefs();
     const expectedCompatRead = services.filter((binding) =>
+      !binding.instanceId.endsWith(".zedStartSvo") &&
+      !binding.instanceId.endsWith(".zedStopSvo") &&
       !binding.instanceId.endsWith(".bagStartRecord") &&
-      !binding.instanceId.endsWith(".bagStopRecord") &&
-      !binding.instanceId.endsWith(".zedStopSvo"));
+      !binding.instanceId.endsWith(".bagStopRecord"));
 
     expect(filterLegacyServiceBindingsForMode("legacy", services)).toEqual(services);
     expect(filterLegacyServiceBindingsForMode("shadow", services)).toEqual(services);

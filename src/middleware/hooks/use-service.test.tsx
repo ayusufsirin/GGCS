@@ -261,10 +261,10 @@ describe("M04-S4 useServiceCall Procedure compatibility", () => {
     expect(procedure.invocations).toHaveLength(0);
   });
 
-  test("keeps Start SVO on legacy in action 03 and preserves its module-load request object unchanged", async () => {
-    const procedure = new FakeProcedure<any, any>(SENSOR_SUITE_RESOURCE_IDS.zedRecordingStart);
+  test("action 04 sends Start SVO through one Runtime Procedure with the exact existing request object", async () => {
+    const procedure = new FakeProcedure<any, { success: boolean }>(SENSOR_SUITE_RESOURCE_IDS.zedRecordingStart);
     const access = compatibilityAccess(new Map([[procedure.id, procedure]]));
-    const serviceBusCall = jest.spyOn(serviceBus, "call").mockResolvedValue({ success: true });
+    const serviceBusCall = jest.spyOn(serviceBus, "call");
     const startSvo = (config as any).tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.zedStartSvo;
     const requestParams = startSvo.widget.props.requestParams;
 
@@ -280,10 +280,15 @@ describe("M04-S4 useServiceCall Procedure compatibility", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Start SVO" }));
-    await act(async () => { await Promise.resolve(); });
+    expect(procedure.invocations).toHaveLength(1);
+    expect(procedure.invocations[0]!.input).toBe(requestParams);
+    expect(serviceBusCall).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Starting" })).toBeDisabled();
 
-    expect(procedure.invocations).toHaveLength(0);
-    expect(serviceBusCall).toHaveBeenCalledTimes(1);
-    expect(serviceBusCall.mock.calls[0]?.[1]).toBe(requestParams);
+    await act(async () => {
+      procedure.invocations[0]!.invocation.succeed({ success: true });
+      await procedure.invocations[0]!.invocation.result();
+    });
+    expect(screen.getByRole("button", { name: "Start SVO" })).toBeEnabled();
   });
 });

@@ -100,15 +100,17 @@ export function isM04Slice3RuntimeReadPort(instanceId: string, portName: string)
 }
 
 const M04_SLICE4_RUNTIME_PROCEDURE_PORTS = new Set([
+  "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.zedStartSvo::callService",
   "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.bagStartRecord::callService",
   "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.bagStopRecord::callService",
   "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.zedStopSvo::callService",
 ]);
 
 /**
- * M04-S4 migrates recording actions one at a time. Action 03 adds Stop SVO
- * after both ROS Bag actions were accepted; Start SVO stays legacy until its
- * own verified expansion step so its request/timestamp behavior remains isolated.
+ * M04-S4 migrates recording actions one at a time. Action 04 completes the
+ * recording cutover by adding Start SVO after both ROS Bag actions and Stop SVO
+ * were accepted. The existing request object is passed through unchanged so the
+ * module-load timestamp behavior remains exactly as before during compatibility.
  */
 export function isM04Slice4RuntimeProcedurePort(instanceId: string, portName: string): boolean {
   const binding = resolveCompatibilityBinding(instanceId, portName);
