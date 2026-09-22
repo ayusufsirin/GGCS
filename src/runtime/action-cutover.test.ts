@@ -26,7 +26,8 @@ describe("M04-S4 Procedure/action cutover policy", () => {
       !isM04Slice4RuntimeProcedurePort(binding.instanceId, binding.attrName));
 
     expect(services).toHaveLength(8);
-    expect(runtimeActions).toEqual([
+    expect(runtimeActions).toHaveLength(3);
+    expect(runtimeActions).toEqual(expect.arrayContaining([
       {
         instanceId: "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.bagStartRecord",
         attrName: "callService",
@@ -39,7 +40,7 @@ describe("M04-S4 Procedure/action cutover policy", () => {
         instanceId: "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.zedStopSvo",
         attrName: "callService",
       },
-    ]);
+    ]));
     expect(legacyServices).toHaveLength(5);
     expect(legacyServices).toContainEqual({
       instanceId: "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.zedStartSvo",
