@@ -101,6 +101,8 @@ const BAG_START_INSTANCE =
   "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.bagStartRecord";
 const BAG_STOP_INSTANCE =
   "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.bagStopRecord";
+const ZED_STOP_INSTANCE =
+  "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.zedStopSvo";
 const ZED_START_INSTANCE =
   "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.zedStartSvo";
 
@@ -174,6 +176,35 @@ describe("M04-S4 useServiceCall Procedure compatibility", () => {
     expect(screen.getByRole("button", { name: "Start ROS Bag" })).toBeEnabled();
   });
 
+
+  test("action 03 sends Stop SVO through exactly one Runtime Procedure", async () => {
+    const procedure = new FakeProcedure<{}, { success: boolean }>(SENSOR_SUITE_RESOURCE_IDS.zedRecordingStop);
+    const serviceBusCall = jest.spyOn(serviceBus, "call");
+    const access = compatibilityAccess(new Map([[procedure.id, procedure]]));
+    const stopSvo = (config as any).tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.zedStopSvo;
+    const requestParams = stopSvo.widget.props.requestParams;
+
+    render(
+      <RuntimeCompatibilityProvider access={access}>
+        <WidgetAttrProvider instanceId={ZED_STOP_INSTANCE}>
+          <ServiceWidget {...stopSvo.widget.props} />
+        </WidgetAttrProvider>
+      </RuntimeCompatibilityProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Stop SVO" }));
+    expect(procedure.invocations).toHaveLength(1);
+    expect(procedure.invocations[0]!.input).toBe(requestParams);
+    expect(serviceBusCall).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Stopping" })).toBeDisabled();
+
+    await act(async () => {
+      procedure.invocations[0]!.invocation.succeed({ success: true });
+      await procedure.invocations[0]!.invocation.result();
+    });
+    expect(screen.getByRole("button", { name: "Stop SVO" })).toBeEnabled();
+  });
+
   test("success/error state is hook-local and simultaneous consumers keep independent Invocation state", async () => {
     const procedure = new FakeProcedure<any, any>(SENSOR_SUITE_RESOURCE_IDS.bagRecordingStop);
     const access = compatibilityAccess(new Map([[procedure.id, procedure]]));
@@ -230,7 +261,7 @@ describe("M04-S4 useServiceCall Procedure compatibility", () => {
     expect(procedure.invocations).toHaveLength(0);
   });
 
-  test("keeps Start SVO on legacy in candidate 1 and preserves its module-load request object unchanged", async () => {
+  test("keeps Start SVO on legacy in action 03 and preserves its module-load request object unchanged", async () => {
     const procedure = new FakeProcedure<any, any>(SENSOR_SUITE_RESOURCE_IDS.zedRecordingStart);
     const access = compatibilityAccess(new Map([[procedure.id, procedure]]));
     const serviceBusCall = jest.spyOn(serviceBus, "call").mockResolvedValue({ success: true });

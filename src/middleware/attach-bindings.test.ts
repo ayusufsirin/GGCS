@@ -51,6 +51,11 @@ const serviceBindings = [
     service: { name: "/legacy-bag-start", type: "std_srvs/srv/Trigger" },
   },
   {
+    instanceId: "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.zedStopSvo",
+    attrName: "callService",
+    service: { name: "/legacy-zed-stop", type: "std_srvs/srv/Trigger" },
+  },
+  {
     instanceId: "tabs.items.rosParameters",
     attrName: "listNodes",
     service: { name: "/rosapi/nodes", type: "rosapi/Nodes" },
@@ -75,7 +80,7 @@ describe("M04-S4 legacy binding attachment", () => {
     attachAllBindingsForMode({}, "compat-read");
 
     expect(attachSubscriberBindings).toHaveBeenCalledWith([subscriberBindings[1]]);
-    expect(attachServiceBindings).toHaveBeenCalledWith([serviceBindings[2]]);
+    expect(attachServiceBindings).toHaveBeenCalledWith([serviceBindings[3]]);
     expect(attachConstantBindings).toHaveBeenCalledWith(["constant"]);
     expect(attachPublisherBindings).toHaveBeenCalledWith(["publisher"]);
   });
