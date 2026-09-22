@@ -7,10 +7,12 @@ import { useRuntimeCompatibility } from "../runtime/compatibility-context";
 import type { SensorSuiteBackendMode } from "../runtime/backend-mode";
 import { filterLegacySubscriberBindingsForMode } from "../runtime/telemetry-cutover";
 import { filterLegacyServiceBindingsForMode } from "../runtime/action-cutover";
+import { filterLegacyParameterServiceBindingsForMode } from "../runtime/parameter-cutover";
 
 export function attachAllBindingsForMode(config: unknown, mode: SensorSuiteBackendMode) {
   const topics = filterLegacySubscriberBindingsForMode(mode, collectSubscriberBindings(config));
-  const services = filterLegacyServiceBindingsForMode(mode, collectServiceBindings(config));
+  const actionFilteredServices = filterLegacyServiceBindingsForMode(mode, collectServiceBindings(config));
+  const services = filterLegacyParameterServiceBindingsForMode(mode, actionFilteredServices);
   const constants = collectConstantBindings(config);
   const publishers = collectPublisherBindings(config);
 

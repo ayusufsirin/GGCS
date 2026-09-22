@@ -118,6 +118,18 @@ export function isM04Slice4RuntimeProcedurePort(instanceId: string, portName: st
     M04_SLICE4_RUNTIME_PROCEDURE_PORTS.has(`${instanceId}::${portName}`);
 }
 
+
+/**
+ * M04-S5 makes the explicit ROSParametersWidget ParameterProvider capability
+ * authoritative in compat-read. Legacy mode remains the restart-based rollback.
+ */
+export function isM04Slice5RuntimeParameterCapability(
+  instanceId: string,
+  capabilityName: string,
+): boolean {
+  return resolveCompatibilityCapability(instanceId, capabilityName)?.kind === "parameterProvider";
+}
+
 export function resolveCompatibilityBinding(
   instanceId: string,
   portName: string,

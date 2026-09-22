@@ -27,6 +27,7 @@ jest.mock("@ggcs/sensor-suite", () => ({
 import {
   isM04Slice3RuntimeReadPort,
   isM04Slice4RuntimeProcedurePort,
+  isM04Slice5RuntimeParameterCapability,
   resolveCompatibilityBinding,
   resolveCompatibilityCapability,
 } from "./compatibility-map";
@@ -97,6 +98,11 @@ describe("M04 compatibility binding map", () => {
       expect(isM04Slice4RuntimeProcedurePort(instanceId, "callService")).toBe(true);
     });
     expect(isM04Slice4RuntimeProcedurePort("tabs.items.rosParameters", "listNodes")).toBe(false);
+  });
+
+  test("S5 enables the semantic ParameterProvider capability only", () => {
+    expect(isM04Slice5RuntimeParameterCapability("tabs.items.rosParameters", "parameters")).toBe(true);
+    expect(isM04Slice5RuntimeParameterCapability("tabs.items.rosParameters", "listNodes")).toBe(false);
   });
 
 });

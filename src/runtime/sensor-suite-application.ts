@@ -1,7 +1,7 @@
 import type { Runtime, RuntimeResource, RuntimeState } from "@ggcs/core";
 import { compileSensorSuiteApplication } from "@ggcs/sensor-suite";
 import {
-  assertM04Slice4ModeSupported,
+  assertM04Slice5ModeSupported,
   backendStartsRuntime,
   type SensorSuiteBackendMode,
 } from "./backend-mode";
@@ -62,7 +62,7 @@ export function createSensorSuiteWebApplication(
   options: CreateSensorSuiteWebApplicationOptions,
   dependencies: CreateSensorSuiteWebApplicationDependencies = {},
 ): SensorSuiteWebApplication {
-  assertM04Slice4ModeSupported(options.mode);
+  assertM04Slice5ModeSupported(options.mode);
 
   const runtimeEnabled = backendStartsRuntime(options.mode);
   let runtime: SensorSuiteRuntimeLike | undefined;

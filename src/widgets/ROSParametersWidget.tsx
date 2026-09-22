@@ -1,6 +1,6 @@
 // src/widgets/ROSParametersWidget.tsx
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useServiceCall } from "../middleware/hooks/use-service";
+import { useParameterBrowser } from "../middleware/hooks/use-parameters";
 
 type ParamRow = {
   name: string;
@@ -12,10 +12,7 @@ type ParamRow = {
 const LS_KEY = "paramDefaults";
 
 export function ROSParametersWidget() {
-  const listNodesSvc = useServiceCall<{}, { nodes: string[] }>("listNodes");
-  const getParamNamesSvc = useServiceCall<{}, { names: string[] }>("getParamNames");
-  const getParamSvc = useServiceCall<{ name: string }, { value: string }>("getParam");
-  const setParamSvc = useServiceCall<{ name: string; value: string }, {}>("setParam");
+  const parameters = useParameterBrowser();
 
   // ---- State ----
   const [loadingNodes, setLoadingNodes] = useState(false);
@@ -24,6 +21,8 @@ export function ROSParametersWidget() {
 
   const [nodes, setNodes] = useState<string[]>([]);
   const [nodesError, setNodesError] = useState<string | undefined>();
+  const [paramsError, setParamsError] = useState<string | undefined>();
+  const [saveErrors, setSaveErrors] = useState<Record<string, string>>({});
   const [selectedNode, setSelectedNode] = useState<string>("");
   const [rows, setRows] = useState<ParamRow[]>([]);
   const [showModifiedOnly, setShowModifiedOnly] = useState(false);
@@ -57,8 +56,7 @@ export function ROSParametersWidget() {
     setLoadingNodes(true);
     setNodesError(undefined);
     try {
-      const res = await listNodesSvc.call({}, { timeoutMs: 10000 });
-      const list = [...(res.nodes ?? [])].sort();
+      const list = [...await parameters.listNodes()].sort();
       setNodes(list);
     } catch (e: any) {
       setNodesError(String(e?.message ?? e));
@@ -66,7 +64,7 @@ export function ROSParametersWidget() {
       setLoadingNodes(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [parameters]);
 
   // Run once on mount
   useEffect(() => {
@@ -76,21 +74,16 @@ export function ROSParametersWidget() {
 
   const loadParams = useCallback(async () => {
     setLoadingParams(true);
+    setParamsError(undefined);
     try {
-      const namesResp = await getParamNamesSvc.call({}, { timeoutMs: 15000 });
-      const allNames = namesResp?.names ?? [];
-      const filtered = selectedNode
-        ? allNames.filter((n) => n.startsWith(selectedNode))
-        : allNames;
-
+      const parameterIds = await parameters.listParameterIds(selectedNode || undefined);
       const defaultsMap = readDefaults();
 
-      // Fetch all current values in parallel, but don't toggle global loading per item
+      // Fetch all current values in parallel, but don't toggle global loading per item.
       const values = await Promise.all(
-        filtered.map(async (name) => {
+        parameterIds.map(async (name) => {
           try {
-            const res = await getParamSvc.call({ name }, { timeoutMs: 8000 });
-            const cur = String(res?.value ?? "");
+            const cur = String(await parameters.read(name));
             const def = defaultsMap[name] !== undefined ? defaultsMap[name] : cur;
             if (defaultsMap[name] === undefined) defaultsMap[name] = cur;
             return { name, currentValue: cur, defaultValue: def, editValue: cur } as ParamRow;
@@ -103,25 +96,33 @@ export function ROSParametersWidget() {
 
       writeDefaults(defaultsMap);
       setRows(values);
+    } catch (e: any) {
+      setParamsError(String(e?.message ?? e));
     } finally {
       setLoadingParams(false);
     }
-  }, [getParamNamesSvc, getParamSvc, readDefaults, writeDefaults, selectedNode]);
+  }, [parameters, readDefaults, writeDefaults, selectedNode]);
 
   const saveParam = useCallback(async (name: string, newValue: string) => {
     setSaving((s) => ({ ...s, [name]: true }));
+    setSaveErrors((errors) => {
+      const { [name]: _drop, ...rest } = errors;
+      return rest;
+    });
     try {
-      await setParamSvc.call({ name, value: newValue }, { timeoutMs: 10000 });
+      await parameters.write(name, newValue);
       setRows((prev) =>
         prev.map((r) => (r.name === name ? { ...r, currentValue: newValue } : r))
       );
+    } catch (e: any) {
+      setSaveErrors((errors) => ({ ...errors, [name]: String(e?.message ?? e) }));
     } finally {
       setSaving((s) => {
         const { [name]: _drop, ...rest } = s;
         return rest;
       });
     }
-  }, [setParamSvc]);
+  }, [parameters]);
 
   const modified = useCallback((r: ParamRow) => r.editValue !== r.defaultValue, []);
 
@@ -169,6 +170,7 @@ export function ROSParametersWidget() {
       </div>
 
       {nodesError && <div style={{ color: "red" }}>Error: {nodesError}</div>}
+      {paramsError && <div style={{ color: "red" }}>Error: {paramsError}</div>}
 
       <div style={{ position: "relative", flex: 1, overflow: "auto" }}>
         {(loadingNodes || loadingParams) && (
@@ -221,6 +223,9 @@ export function ROSParametersWidget() {
                   >
                     {isSaving ? "Saving…" : "Save"}
                   </button>
+                  {saveErrors[r.name] && (
+                    <div style={{ color: "red", marginTop: 4 }}>{saveErrors[r.name]}</div>
+                  )}
                 </td>
               </tr>
             );

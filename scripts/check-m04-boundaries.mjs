@@ -16,9 +16,12 @@ const dashboard = read("src/bootstrap.tsx");
 const attachBindings = read("src/middleware/attach-bindings.ts");
 const telemetryCutover = read("src/runtime/telemetry-cutover.ts");
 const actionCutover = read("src/runtime/action-cutover.ts");
+const parameterCutover = read("src/runtime/parameter-cutover.ts");
 const useAttr = read("src/middleware/hooks/use-attr.ts");
 const useService = read("src/middleware/hooks/use-service.ts");
 const usePublisher = read("src/middleware/hooks/use-publisher.ts");
+const useParameters = read("src/middleware/hooks/use-parameters.ts");
+const rosParametersWidget = read("src/widgets/ROSParametersWidget.tsx");
 const rosConn = read("src/middleware/roslib/ros-conn.ts");
 
 for (const dependency of ["react", "react-dom", "roslib"]) {
@@ -41,14 +44,19 @@ if (!backendMode.includes('return "legacy"')) {
 for (const mode of ["legacy", "shadow", "compat-read", "compat-full"]) {
   if (!backendMode.includes(`"${mode}"`)) violations.push(`M04 backend vocabulary is missing ${mode}`);
 }
-if (!backendMode.includes("assertM04Slice4ModeSupported")) {
-  violations.push("M04-S4 must explicitly gate unsupported compatibility modes");
+if (!backendMode.includes("assertM04Slice5ModeSupported")) {
+  violations.push("M04-S5 must explicitly gate unsupported compatibility modes");
 }
 if (!backendMode.includes('if (mode === "compat-full")')) {
-  violations.push("M04-S4 must keep compat-full fail-closed until later closure slices");
+  violations.push("M04-S5 must keep compat-full fail-closed until the closure slice");
 }
 if (!backendMode.includes('mode === "compat-read" || mode === "compat-full"')) {
-  violations.push("M04-S4 must separately enable mapped recording actions in compat-read");
+  violations.push("M04-S5 must keep Runtime-backed compatibility enabled in compat-read");
+}
+
+
+if (!backendMode.includes("backendUsesRuntimeForParameters")) {
+  violations.push("M04-S5 must explicitly enable ParameterProvider authority by backend mode");
 }
 
 for (const forbidden of [
@@ -112,7 +120,10 @@ if (!attachBindings.includes("filterLegacySubscriberBindingsForMode")) {
   violations.push("M04-S4 must retain S3 telemetry filtering");
 }
 if (!attachBindings.includes("filterLegacyServiceBindingsForMode")) {
-  violations.push("M04-S4 must remove migrated Procedures from the legacy service binder");
+  violations.push("M04-S5 must retain recording Procedure filtering");
+}
+if (!attachBindings.includes("filterLegacyParameterServiceBindingsForMode")) {
+  violations.push("M04-S5 must remove legacy parameter services when ParameterProvider is authoritative");
 }
 for (const legacyBinder of ["attachServiceBindings", "attachConstantBindings", "attachPublisherBindings"]) {
   if (!attachBindings.includes(legacyBinder)) {
@@ -161,8 +172,36 @@ for (const forbidden of ["ROSLIB", "new ROSLIB.Service", "/zed/", "/bag_recorder
     violations.push(`M04-S4 useServiceCall must not create/discover transport state: ${forbidden}`);
   }
 }
+if (!parameterCutover.includes("isM04Slice5LegacyParameterServicePort") ||
+    !parameterCutover.includes("backendUsesRuntimeForParameters")) {
+  violations.push("M04-S5 parameter service filtering must use explicit parameter ports and backend policy");
+}
+if (!compatibilityMap.includes("isM04Slice5RuntimeParameterCapability") ||
+    !compatibilityMap.includes('?.kind === "parameterProvider"')) {
+  violations.push("M04-S5 must derive ParameterProvider authority from the explicit semantic capability binding");
+}
+if (!useParameters.includes("resourceForCapability") ||
+    !useParameters.includes(".list(") ||
+    !useParameters.includes(".resolve<string>(") ||
+    !useParameters.includes(".refresh().result()") ||
+    !useParameters.includes(".write(value).result()")) {
+  violations.push("M04-S5 parameter browser compatibility must use ParameterProvider/Parameter semantics");
+}
+if (!useParameters.includes("serviceBus")) {
+  violations.push("M04-S5 parameter browser compatibility must retain legacy rollback through serviceBus");
+}
+for (const forbidden of ["/rosapi/", "rosapi/GetParam", "rosapi/SetParam"]) {
+  if (useParameters.includes(forbidden)) {
+    violations.push(`M04-S5 parameter hook must not know rosapi service names/types: ${forbidden}`);
+  }
+}
+for (const forbidden of ["useServiceCall", "/rosapi/", "getParamNames", "setParamSvc", "getParamSvc"]) {
+  if (rosParametersWidget.includes(forbidden)) {
+    violations.push(`ROSParametersWidget must use semantic parameter access rather than rosapi/service hooks: ${forbidden}`);
+  }
+}
 if (!usePublisher.includes("publisherBus")) {
-  violations.push("M04-S4 unexpectedly cut over publishers before their accepted slice");
+  violations.push("M04-S5 unexpectedly cut over publishers before the closure slice");
 }
 if (!rosConn.includes("resolveRosbridgeUrl")) {
   violations.push("legacy ROSLIB and new Runtime must share Web endpoint selection semantics");

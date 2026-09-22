@@ -32,16 +32,18 @@ export function backendUsesRuntimeForActions(mode: SensorSuiteBackendMode): bool
   return mode === "compat-read" || mode === "compat-full";
 }
 
+export function backendUsesRuntimeForParameters(mode: SensorSuiteBackendMode): boolean {
+  return mode === "compat-read" || mode === "compat-full";
+}
+
 /**
- * M04-S4 separately enables verified recording Procedure ports in compat-read
- * one action at a time while compat-full remains gated until ParameterProvider and
- * compatibility-closure work land. Failing closed prevents the mode flag from
- * claiming broader side-effect authority than the implemented slice.
+ * M04-S5 enables the accepted ParameterProvider compatibility path in compat-read
+ * while compat-full remains gated until the compatibility-closure slice lands.
  */
-export function assertM04Slice4ModeSupported(mode: SensorSuiteBackendMode): void {
+export function assertM04Slice5ModeSupported(mode: SensorSuiteBackendMode): void {
   if (mode === "compat-full") {
     throw new Error(
-      `GGCS backend mode ${mode} is reserved but not enabled in M04-S4; use legacy, shadow, or compat-read until parameter and compatibility closure slices land`,
+      `GGCS backend mode ${mode} is reserved but not enabled in M04-S5; use legacy, shadow, or compat-read until compatibility closure lands`,
     );
   }
 }

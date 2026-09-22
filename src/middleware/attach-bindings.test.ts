@@ -75,12 +75,12 @@ beforeEach(() => {
   (attachPublisherBindings as jest.Mock).mockReturnValue(jest.fn());
 });
 
-describe("M04-S4 legacy binding attachment", () => {
-  test("compat-read removes migrated telemetry and recording Procedures while keeping camera and rosapi exceptions", () => {
+describe("M04-S5 legacy binding attachment", () => {
+  test("compat-read removes migrated telemetry, recording Procedures, and parameter services while keeping camera", () => {
     attachAllBindingsForMode({}, "compat-read");
 
     expect(attachSubscriberBindings).toHaveBeenCalledWith([subscriberBindings[1]]);
-    expect(attachServiceBindings).toHaveBeenCalledWith([serviceBindings[3]]);
+    expect(attachServiceBindings).toHaveBeenCalledWith([]);
     expect(attachConstantBindings).toHaveBeenCalledWith(["constant"]);
     expect(attachPublisherBindings).toHaveBeenCalledWith(["publisher"]);
   });
