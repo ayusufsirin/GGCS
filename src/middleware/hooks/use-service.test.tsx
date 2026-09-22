@@ -97,6 +97,8 @@ function compatibilityAccess(
   };
 }
 
+const BAG_START_INSTANCE =
+  "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.bagStartRecord";
 const BAG_STOP_INSTANCE =
   "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.bagStopRecord";
 const ZED_START_INSTANCE =
@@ -142,6 +144,34 @@ describe("M04-S4 useServiceCall Procedure compatibility", () => {
       await procedure.invocations[0]!.invocation.result();
     });
     expect(screen.getByRole("button", { name: "Stop ROS Bag" })).toBeEnabled();
+  });
+
+  test("action 02 sends Start ROS Bag through exactly one Runtime Procedure", async () => {
+    const procedure = new FakeProcedure<{}, { success: boolean }>(SENSOR_SUITE_RESOURCE_IDS.bagRecordingStart);
+    const serviceBusCall = jest.spyOn(serviceBus, "call");
+    const access = compatibilityAccess(new Map([[procedure.id, procedure]]));
+    const startBag = (config as any).tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.bagStartRecord;
+    const requestParams = startBag.widget.props.requestParams;
+
+    render(
+      <RuntimeCompatibilityProvider access={access}>
+        <WidgetAttrProvider instanceId={BAG_START_INSTANCE}>
+          <ServiceWidget {...startBag.widget.props} />
+        </WidgetAttrProvider>
+      </RuntimeCompatibilityProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Start ROS Bag" }));
+    expect(procedure.invocations).toHaveLength(1);
+    expect(procedure.invocations[0]!.input).toBe(requestParams);
+    expect(serviceBusCall).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Starting" })).toBeDisabled();
+
+    await act(async () => {
+      procedure.invocations[0]!.invocation.succeed({ success: true });
+      await procedure.invocations[0]!.invocation.result();
+    });
+    expect(screen.getByRole("button", { name: "Start ROS Bag" })).toBeEnabled();
   });
 
   test("success/error state is hook-local and simultaneous consumers keep independent Invocation state", async () => {

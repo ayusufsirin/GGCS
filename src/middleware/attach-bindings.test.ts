@@ -75,7 +75,7 @@ describe("M04-S4 legacy binding attachment", () => {
     attachAllBindingsForMode({}, "compat-read");
 
     expect(attachSubscriberBindings).toHaveBeenCalledWith([subscriberBindings[1]]);
-    expect(attachServiceBindings).toHaveBeenCalledWith([serviceBindings[1], serviceBindings[2]]);
+    expect(attachServiceBindings).toHaveBeenCalledWith([serviceBindings[2]]);
     expect(attachConstantBindings).toHaveBeenCalledWith(["constant"]);
     expect(attachPublisherBindings).toHaveBeenCalledWith(["publisher"]);
   });

@@ -87,13 +87,14 @@ describe("M04 compatibility binding map", () => {
       "image",
     )).toBe(false);
   });
-  test("S4 candidate 1 enables only Stop ROS Bag while later recording Procedures stay legacy", () => {
-    expect(isM04Slice4RuntimeProcedurePort(
-      "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.bagStopRecord",
-      "callService",
-    )).toBe(true);
+  test("S4 action 02 enables both ROS Bag Procedures while SVO actions stay legacy", () => {
     [
       "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.bagStartRecord",
+      "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.bagStopRecord",
+    ].forEach((instanceId) => {
+      expect(isM04Slice4RuntimeProcedurePort(instanceId, "callService")).toBe(true);
+    });
+    [
       "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.zedStartSvo",
       "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.zedStopSvo",
     ].forEach((instanceId) => {

@@ -18,7 +18,7 @@ function collectServiceRefs(): ServiceRef[] {
 }
 
 describe("M04-S4 Procedure/action cutover policy", () => {
-  test("candidate 1 cuts over only Stop ROS Bag and leaves all other services legacy", () => {
+  test("action 02 cuts over both ROS Bag Procedures and leaves SVO/rosapi services legacy", () => {
     const services = collectServiceRefs();
     const runtimeActions = services.filter((binding) =>
       isM04Slice4RuntimeProcedurePort(binding.instanceId, binding.attrName));
@@ -28,26 +28,31 @@ describe("M04-S4 Procedure/action cutover policy", () => {
     expect(services).toHaveLength(8);
     expect(runtimeActions).toEqual([
       {
+        instanceId: "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.bagStartRecord",
+        attrName: "callService",
+      },
+      {
         instanceId: "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.bagStopRecord",
         attrName: "callService",
       },
     ]);
-    expect(legacyServices).toHaveLength(7);
+    expect(legacyServices).toHaveLength(6);
     expect(legacyServices).toContainEqual({
-      instanceId: "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.bagStartRecord",
+      instanceId: "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.zedStartSvo",
       attrName: "callService",
     });
     expect(legacyServices).toContainEqual({
-      instanceId: "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.zedStartSvo",
+      instanceId: "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.zedStopSvo",
       attrName: "callService",
     });
     expect(legacyServices.filter((binding) => binding.instanceId === "tabs.items.rosParameters")).toHaveLength(4);
   });
 
-  test("legacy and shadow retain every service while compat-read removes only the verified action", () => {
+  test("legacy and shadow retain every service while compat-read removes both verified ROS Bag actions", () => {
     const services = collectServiceRefs();
     const expectedCompatRead = services.filter((binding) =>
-      binding.instanceId !== "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.bagStopRecord");
+      !binding.instanceId.endsWith(".bagStartRecord") &&
+      !binding.instanceId.endsWith(".bagStopRecord"));
 
     expect(filterLegacyServiceBindingsForMode("legacy", services)).toEqual(services);
     expect(filterLegacyServiceBindingsForMode("shadow", services)).toEqual(services);
