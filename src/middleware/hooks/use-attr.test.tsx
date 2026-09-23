@@ -64,7 +64,12 @@ function Probe({ portName, initial }: { portName: string; initial?: number }) {
   return <span data-testid="value">{value === undefined ? "undefined" : String(value)}</span>;
 }
 
-function renderProbe(source: Source<any> | undefined, instanceId = SYSTEM_STATUS.instanceId, portName = SYSTEM_STATUS.portName, initial?: number) {
+function renderProbe(
+  source: Source<any> | undefined,
+  instanceId: string = SYSTEM_STATUS.instanceId,
+  portName: string = SYSTEM_STATUS.portName,
+  initial?: number,
+) {
   return render(
     <RuntimeCompatibilityProvider access={compatibilityAccess(source)}>
       <WidgetAttrProvider instanceId={instanceId}>
