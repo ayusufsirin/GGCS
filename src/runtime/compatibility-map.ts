@@ -69,6 +69,9 @@ export const SENSOR_SUITE_COMPATIBILITY_BINDINGS: CompatibilityBindingMap = {
   "tabs.items.home.grids.items.panel.tabs.items.gauges.grids.items.accel": {
     ports: { value: source(SENSOR_SUITE_RESOURCE_IDS.vehicleAcceleration) },
   },
+  "tabs.items.images.grids.items.zedRgb": {
+    ports: { image: source(SENSOR_SUITE_RESOURCE_IDS.cameraZedRgbData) },
+  },
   "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.zedStartSvo": {
     ports: { callService: procedure(SENSOR_SUITE_RESOURCE_IDS.zedRecordingStart) },
   },
@@ -96,6 +99,12 @@ export const SENSOR_SUITE_COMPATIBILITY_BINDINGS: CompatibilityBindingMap = {
  * subscription can remain as the documented opt-in exception.
  */
 export function isM04Slice3RuntimeReadPort(instanceId: string, portName: string): boolean {
+  if (instanceId === "tabs.items.images.grids.items.zedRgb" && portName === "image") return false;
+  return resolveCompatibilityBinding(instanceId, portName)?.kind === "source";
+}
+
+/** M04-S6 closes telemetry compatibility by including the proven camera Source. */
+export function isM04Slice6RuntimeReadPort(instanceId: string, portName: string): boolean {
   return resolveCompatibilityBinding(instanceId, portName)?.kind === "source";
 }
 

@@ -1,5 +1,6 @@
 import {
-  assertM04Slice5ModeSupported,
+  assertM04Slice6ModeSupported,
+  backendUsesLegacyBindings,
   backendUsesRuntimeForParameters,
   backendStartsRuntime,
   parseSensorSuiteBackendMode,
@@ -15,18 +16,22 @@ describe("M04 backend mode", () => {
   test("shadow starts the Runtime without claiming UI authority", () => {
     expect(parseSensorSuiteBackendMode("shadow")).toBe("shadow");
     expect(backendStartsRuntime("shadow")).toBe(true);
-    expect(() => assertM04Slice5ModeSupported("shadow")).not.toThrow();
+    expect(() => assertM04Slice6ModeSupported("shadow")).not.toThrow();
   });
 
   test("compat-read is enabled for telemetry, recording Procedures, and ParameterProvider access", () => {
     expect(parseSensorSuiteBackendMode("compat-read")).toBe("compat-read");
     expect(backendStartsRuntime("compat-read")).toBe(true);
     expect(backendUsesRuntimeForParameters("compat-read")).toBe(true);
-    expect(() => assertM04Slice5ModeSupported("compat-read")).not.toThrow();
+    expect(() => assertM04Slice6ModeSupported("compat-read")).not.toThrow();
   });
 
-  test("compat-full still fails closed until compatibility closure lands", () => {
-    expect(() => assertM04Slice5ModeSupported("compat-full")).toThrow(/not enabled in M04-S5/);
+  test("compat-full is enabled and disables the legacy binding shell", () => {
+    expect(() => assertM04Slice6ModeSupported("compat-full")).not.toThrow();
+    expect(backendStartsRuntime("compat-full")).toBe(true);
+    expect(backendUsesRuntimeForParameters("compat-full")).toBe(true);
+    expect(backendUsesLegacyBindings("compat-full")).toBe(false);
+    expect(backendUsesLegacyBindings("legacy")).toBe(true);
   });
 
   test("invalid configuration never silently falls back", () => {

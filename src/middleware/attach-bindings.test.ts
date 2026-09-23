@@ -75,7 +75,7 @@ beforeEach(() => {
   (attachPublisherBindings as jest.Mock).mockReturnValue(jest.fn());
 });
 
-describe("M04-S5 legacy binding attachment", () => {
+describe("M04-S6 legacy binding attachment", () => {
   test("compat-read removes migrated telemetry, recording Procedures, and parameter services while keeping camera", () => {
     attachAllBindingsForMode({}, "compat-read");
 
@@ -83,6 +83,19 @@ describe("M04-S5 legacy binding attachment", () => {
     expect(attachServiceBindings).toHaveBeenCalledWith([]);
     expect(attachConstantBindings).toHaveBeenCalledWith(["constant"]);
     expect(attachPublisherBindings).toHaveBeenCalledWith(["publisher"]);
+  });
+
+  test("compat-full does not collect or attach any legacy bindings", () => {
+    attachAllBindingsForMode({}, "compat-full");
+
+    expect(collectSubscriberBindings).not.toHaveBeenCalled();
+    expect(collectServiceBindings).not.toHaveBeenCalled();
+    expect(collectConstantBindings).not.toHaveBeenCalled();
+    expect(collectPublisherBindings).not.toHaveBeenCalled();
+    expect(attachSubscriberBindings).not.toHaveBeenCalled();
+    expect(attachServiceBindings).not.toHaveBeenCalled();
+    expect(attachConstantBindings).not.toHaveBeenCalled();
+    expect(attachPublisherBindings).not.toHaveBeenCalled();
   });
 
   test("legacy mode keeps complete subscriber and service sets for restart-based rollback", () => {

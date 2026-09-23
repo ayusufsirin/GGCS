@@ -205,6 +205,35 @@ describe("M04-S4 useServiceCall Procedure compatibility", () => {
     expect(screen.getByRole("button", { name: "Stop SVO" })).toBeEnabled();
   });
 
+  test("compat-full keeps mapped recording actions Runtime-only", async () => {
+    const procedure = new FakeProcedure<{}, { success: boolean }>(SENSOR_SUITE_RESOURCE_IDS.bagRecordingStop);
+    const serviceBusCall = jest.spyOn(serviceBus, "call");
+    const access = compatibilityAccess(new Map([[procedure.id, procedure]]), "compat-full");
+
+    render(
+      <RuntimeCompatibilityProvider access={access}>
+        <WidgetAttrProvider instanceId={BAG_STOP_INSTANCE}><HookProbe label="full" /></WidgetAttrProvider>
+      </RuntimeCompatibilityProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "full" }));
+    expect(procedure.invocations).toHaveLength(1);
+    expect(serviceBusCall).not.toHaveBeenCalled();
+  });
+
+  test("compat-full fails closed for an unmapped service port instead of using serviceBus", () => {
+    const access = compatibilityAccess(new Map(), "compat-full");
+    const consoleError = jest.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      expect(() => render(
+        <RuntimeCompatibilityProvider access={access}>
+          <WidgetAttrProvider instanceId="unmapped.widget"><HookProbe label="unmapped" /></WidgetAttrProvider>
+        </RuntimeCompatibilityProvider>,
+      )).toThrow(/compat-full has no Runtime Procedure mapping/);
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
   test("success/error state is hook-local and simultaneous consumers keep independent Invocation state", async () => {
     const procedure = new FakeProcedure<any, any>(SENSOR_SUITE_RESOURCE_IDS.bagRecordingStop);
     const access = compatibilityAccess(new Map([[procedure.id, procedure]]));

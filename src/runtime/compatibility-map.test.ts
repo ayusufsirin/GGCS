@@ -16,6 +16,7 @@ jest.mock("@ggcs/sensor-suite", () => ({
     healthGnssFixed: "arnav.health.gnssFixed",
     rtkFixedLegacy: "arnav.display.rtkFixedLegacy",
     vehicleAcceleration: "vehicle.acceleration",
+    cameraZedRgbData: "camera.zed.rgb.data",
     zedRecordingStart: "zed.recording.start",
     zedRecordingStop: "zed.recording.stop",
     bagRecordingStart: "bag.recording.start",
@@ -28,6 +29,7 @@ import {
   isM04Slice3RuntimeReadPort,
   isM04Slice4RuntimeProcedurePort,
   isM04Slice5RuntimeParameterCapability,
+  isM04Slice6RuntimeReadPort,
   resolveCompatibilityBinding,
   resolveCompatibilityCapability,
 } from "./compatibility-map";
@@ -88,6 +90,15 @@ describe("M04 compatibility binding map", () => {
       "image",
     )).toBe(false);
   });
+  test("S6 maps the camera compatibility value without changing S3 compat-read authority", () => {
+    expect(resolveCompatibilityBinding(
+      "tabs.items.images.grids.items.zedRgb",
+      "image",
+    )).toEqual({ kind: "source", resourceId: "camera.zed.rgb.data" });
+    expect(isM04Slice3RuntimeReadPort("tabs.items.images.grids.items.zedRgb", "image")).toBe(false);
+    expect(isM04Slice6RuntimeReadPort("tabs.items.images.grids.items.zedRgb", "image")).toBe(true);
+  });
+
   test("S4 action 04 enables all four recording Procedures while rosapi stays legacy", () => {
     [
       "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.zedStartSvo",

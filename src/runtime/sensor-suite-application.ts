@@ -1,7 +1,7 @@
 import type { Runtime, RuntimeResource, RuntimeState } from "@ggcs/core";
 import { compileSensorSuiteApplication } from "@ggcs/sensor-suite";
 import {
-  assertM04Slice5ModeSupported,
+  assertM04Slice6ModeSupported,
   backendStartsRuntime,
   type SensorSuiteBackendMode,
 } from "./backend-mode";
@@ -62,8 +62,10 @@ export function createSensorSuiteWebApplication(
   options: CreateSensorSuiteWebApplicationOptions,
   dependencies: CreateSensorSuiteWebApplicationDependencies = {},
 ): SensorSuiteWebApplication {
-  assertM04Slice5ModeSupported(options.mode);
+  assertM04Slice6ModeSupported(options.mode);
 
+  const runtimeOptions: CreateSensorSuiteWebApplicationOptions =
+    options.mode === "compat-full" ? { ...options, includeCamera: true } : options;
   const runtimeEnabled = backendStartsRuntime(options.mode);
   let runtime: SensorSuiteRuntimeLike | undefined;
 
@@ -94,7 +96,7 @@ export function createSensorSuiteWebApplication(
       if (stopped) throw new Error("Sensor Suite Web application cannot restart after stop");
       if (started) return;
       if (runtimeEnabled) {
-        runtime ??= (dependencies.createRuntime ?? productionRuntime)(options);
+        runtime ??= (dependencies.createRuntime ?? productionRuntime)(runtimeOptions);
         await runtime.start();
       }
       started = true;

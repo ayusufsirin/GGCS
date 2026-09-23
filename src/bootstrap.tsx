@@ -6,6 +6,8 @@ import { WIDGETS } from "./widgets/widgets";
 import { FallbackWidget } from "./widgets/FallbackWidget";
 import { useAttachAllBindings } from "./middleware/attach-bindings";
 import { Entity, Grids, Tab } from "./interfaces";
+import { useRuntimeCompatibility } from "./runtime/compatibility-context";
+import { backendUsesLegacyBindings } from "./runtime/backend-mode";
 
 // ---------- Shared helpers ----------
 const joinPath = (path: string[]) => path.join(".");
@@ -216,14 +218,18 @@ function CopyrightBar({ owner, email }: { owner: string, email: string }) {
 }
 
 // ---------- Top-level dashboard ----------
-export function Dashboard() {
-  // Bind once for the whole config (scanner already recursive)
+function LegacyBindingsBridge() {
   useAttachAllBindings(config);
+  return null;
+}
 
+export function Dashboard() {
+  const { mode } = useRuntimeCompatibility();
   const root: Entity = (config as unknown) as Entity;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
+      {backendUsesLegacyBindings(mode) ? <LegacyBindingsBridge /> : null}
       {/* Root can be tabs/grids/widget — we render it recursively */}
       <div style={{ flex: 1, minHeight: 0 }}>
         <RenderNode node={root as Entity} path={[]} />

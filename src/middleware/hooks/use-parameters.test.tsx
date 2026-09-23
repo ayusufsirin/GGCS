@@ -153,6 +153,16 @@ describe("M04-S5 ParameterProvider compatibility", () => {
     expect(busCall).not.toHaveBeenCalled();
   });
 
+  test("compat-full uses ParameterProvider without consulting serviceBus", async () => {
+    const provider = new FakeParameterProvider();
+    const busCall = jest.spyOn(serviceBus, "call");
+    const parameters = captureAccess(compatibilityAccess(provider, "compat-full"));
+
+    await expect(parameters.read("/alpha:param_a")).resolves.toBe("11");
+    await parameters.write("/alpha:param_a", "13");
+    expect(busCall).not.toHaveBeenCalled();
+  });
+
   test("compat-read fails closed when the mapped ParameterProvider is unavailable", () => {
     const consoleError = jest.spyOn(console, "error").mockImplementation(() => undefined);
     try {

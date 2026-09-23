@@ -90,6 +90,11 @@ function RuntimeProbe({
   return <span data-testid={testId}>{value === undefined ? "undefined" : String(value)}</span>;
 }
 
+function StringProbe({ testId, portName }: { testId: string; portName: string }) {
+  const value = useAttr<string>(portName);
+  return <span data-testid={testId}>{value === undefined ? "undefined" : value}</span>;
+}
+
 function renderRuntimeProbe(
   source: FakeSource<number>,
   options: {
@@ -230,6 +235,40 @@ describe("M04-S3 useAttr compatibility projection", () => {
 
     act(() => instanceStore.emit(cameraInstance, "image", 7));
     expect(screen.getByTestId("value")).toHaveTextContent("7");
+  });
+
+  test("compat-full routes the camera through the Runtime compatibility Source", () => {
+    const source = new FakeSource<string>({ state: "fresh", value: "base64-camera", updatedAt: 1 });
+    const access = compatibilityAccess(source, "compat-full");
+    const cameraInstance = "tabs.items.images.grids.items.zedRgb";
+
+    render(
+      <RuntimeCompatibilityProvider access={access}>
+        <WidgetAttrProvider instanceId={cameraInstance}>
+          <StringProbe testId="camera" portName="image" />
+        </WidgetAttrProvider>
+      </RuntimeCompatibilityProvider>,
+    );
+
+    expect(source.subscriptions).toBe(1);
+    expect(screen.getByTestId("camera")).toHaveTextContent("base64-camera");
+  });
+
+  test("compat-full fails closed instead of consulting instanceStore for an unmapped attr", () => {
+    const source = new FakeSource<number>({ state: "fresh", value: 1, updatedAt: 1 });
+    const access = compatibilityAccess(source, "compat-full");
+    const consoleError = jest.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      expect(() => render(
+        <RuntimeCompatibilityProvider access={access}>
+          <WidgetAttrProvider instanceId="unmapped.widget">
+            <RuntimeProbe testId="unmapped" portName="value" />
+          </WidgetAttrProvider>
+        </RuntimeCompatibilityProvider>,
+      )).toThrow(/compat-full has no Runtime Source mapping/);
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 
   test("legacy mode remains an explicit rollback path for migrated telemetry", () => {

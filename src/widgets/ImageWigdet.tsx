@@ -7,7 +7,7 @@ type Props = {
 
 export function ImageWidget({ label }: Props) {
 
-  const image = useAttr<number>("image");
+  const image = useAttr<string>("image");
 
   return (
     <div>

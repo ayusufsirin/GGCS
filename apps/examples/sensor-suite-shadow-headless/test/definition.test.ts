@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { DERIVED_PROVIDER_ID } from "@ggcs/core";
 import { ARNAV_COMPUTATION_IDS, ARNAV_INS_MESSAGE_TYPE, ARNAV_INS_TYPE_ID } from "@ggcs/arnav";
-import { rosServiceTypeId } from "@ggcs/ros";
+import { rosMessageTypeId, rosServiceTypeId } from "@ggcs/ros";
 import { ROS_STD_MESSAGE_TYPES, ROS_STD_TYPE_IDS } from "@ggcs/ros-std-msgs";
 import { ROSBRIDGE_PROVIDER_IDS, type RosbridgeClientFactory } from "@ggcs/transport-rosbridge";
 import {
   SENSOR_SUITE_ACCELERATION_TOPIC,
   SENSOR_SUITE_ARNAV_TOPIC,
+  SENSOR_SUITE_COMPUTATION_IDS,
   SENSOR_SUITE_RECORDING_SERVICES,
   SENSOR_SUITE_RECORDING_SERVICE_TYPES,
   SENSOR_SUITE_RESOURCE_IDS,
@@ -16,6 +17,7 @@ import {
   SENSOR_SUITE_ZED_RGB_TOPIC,
   compileSensorSuiteShadowApplication,
   createSensorSuiteShadowDefinition,
+  projectCompressedImageData,
 } from "../src/definition.js";
 
 describe("Sensor Suite shadow definition", () => {
@@ -87,20 +89,33 @@ describe("Sensor Suite shadow definition", () => {
     ]));
   });
 
-  it("keeps camera traffic disabled by default and exposes an explicit opt-in raw Source", () => {
+  it("keeps camera traffic disabled by default and exposes an opt-in legacy-data compatibility Source", () => {
     const baseline = createSensorSuiteShadowDefinition({ rosbridgeUrl: "ws://shadow.invalid:9090" });
     expect(baseline.resources.some((resource) => resource.id === SENSOR_SUITE_RESOURCE_IDS.cameraZedRgbRaw)).toBe(false);
+    expect(baseline.resources.some((resource) => resource.id === SENSOR_SUITE_RESOURCE_IDS.cameraZedRgbData)).toBe(false);
+
     const withCamera = createSensorSuiteShadowDefinition({ rosbridgeUrl: "ws://shadow.invalid:9090", includeCamera: true });
     expect(withCamera.resources.find((resource) => resource.id === SENSOR_SUITE_RESOURCE_IDS.cameraZedRgbRaw)).toEqual({
       id: SENSOR_SUITE_RESOURCE_IDS.cameraZedRgbRaw,
       provider: ROSBRIDGE_PROVIDER_IDS.topicSource,
-      type: `ros:message/${SENSOR_SUITE_ZED_RGB_MESSAGE_TYPE}`,
+      type: rosMessageTypeId(SENSOR_SUITE_ZED_RGB_MESSAGE_TYPE),
       config: {
         connection: SENSOR_SUITE_RESOURCE_IDS.connection,
         topic: SENSOR_SUITE_ZED_RGB_TOPIC,
         messageType: SENSOR_SUITE_ZED_RGB_MESSAGE_TYPE,
       },
     });
+    expect(withCamera.resources.find((resource) => resource.id === SENSOR_SUITE_RESOURCE_IDS.cameraZedRgbData)).toEqual({
+      id: SENSOR_SUITE_RESOURCE_IDS.cameraZedRgbData,
+      provider: DERIVED_PROVIDER_ID,
+      type: "ggcs:type/string",
+      config: {
+        computation: SENSOR_SUITE_COMPUTATION_IDS.compressedImageData,
+        inputs: { input: SENSOR_SUITE_RESOURCE_IDS.cameraZedRgbRaw },
+      },
+    });
+    expect(projectCompressedImageData({ data: "encoded-image" })).toBe("encoded-image");
+    expect(() => projectCompressedImageData({ data: 42 })).toThrow(/field data must be a string/);
   });
 
   it("maps the legacy RTK display explicitly to the existing gnss_fixed semantic truth", () => {
@@ -132,6 +147,7 @@ describe("Sensor Suite shadow definition", () => {
       SENSOR_SUITE_RESOURCE_IDS.vehicleAccelerationRaw,
       SENSOR_SUITE_RESOURCE_IDS.arnavSatellitesRaw,
       SENSOR_SUITE_RESOURCE_IDS.cameraZedRgbRaw,
+      SENSOR_SUITE_RESOURCE_IDS.cameraZedRgbData,
       SENSOR_SUITE_RESOURCE_IDS.zedRecordingStart,
       SENSOR_SUITE_RESOURCE_IDS.zedRecordingStop,
       SENSOR_SUITE_RESOURCE_IDS.bagRecordingStart,

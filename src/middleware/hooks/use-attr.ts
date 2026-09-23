@@ -3,7 +3,10 @@ import type { Observation, Source } from "@ggcs/core";
 import { instanceStore } from "../instance-store";
 import { Ctx } from "./common";
 import { backendUsesRuntimeForTelemetry } from "../../runtime/backend-mode";
-import { isM04Slice3RuntimeReadPort } from "../../runtime/compatibility-map";
+import {
+  isM04Slice3RuntimeReadPort,
+  isM04Slice6RuntimeReadPort,
+} from "../../runtime/compatibility-map";
 import { useRuntimeCompatibility } from "../../runtime/compatibility-context";
 
 /**
@@ -30,8 +33,11 @@ export function useAttr<T = any>(attrName: string, initial?: T) {
 
   const runtimeCompatibility = useRuntimeCompatibility();
   const runtimeRead =
-    backendUsesRuntimeForTelemetry(runtimeCompatibility.mode) &&
-    isM04Slice3RuntimeReadPort(ctx.instanceId, attrName);
+    runtimeCompatibility.mode === "compat-full"
+      ? isM04Slice6RuntimeReadPort(ctx.instanceId, attrName)
+      : backendUsesRuntimeForTelemetry(runtimeCompatibility.mode) &&
+        isM04Slice3RuntimeReadPort(ctx.instanceId, attrName);
+  const fullModeUnmapped = runtimeCompatibility.mode === "compat-full" && !runtimeRead;
 
   const runtimeSource = runtimeRead
     ? runtimeCompatibility.resourceForPort<Source<T>>(ctx.instanceId, attrName)
@@ -41,8 +47,11 @@ export function useAttr<T = any>(attrName: string, initial?: T) {
   // port that has been explicitly cut over. Rollback is mode selection + restart.
   if (runtimeRead && (!runtimeSource || runtimeSource.kind !== "source")) {
     throw new Error(
-      `GGCS compat-read source unavailable for ${ctx.instanceId}::${attrName}`,
+      `GGCS ${runtimeCompatibility.mode} source unavailable for ${ctx.instanceId}::${attrName}`,
     );
+  }
+  if (fullModeUnmapped) {
+    throw new Error(`GGCS compat-full has no Runtime Source mapping for ${ctx.instanceId}::${attrName}`);
   }
 
   const [val, setVal] = useState<T | undefined>(initial);

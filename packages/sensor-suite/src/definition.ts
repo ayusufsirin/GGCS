@@ -2,7 +2,9 @@ import {
   DERIVED_PROVIDER_ID,
   compileApplication,
   createRegistryBuilder,
+  defineValueTransform,
   type CompiledRuntimeDefinition,
+  type PluginDefinition,
 } from "@ggcs/core";
 import {
   ARNAV_COMPUTATION_IDS,
@@ -14,7 +16,9 @@ import {
 import {
   ROS_PLUGIN_ID,
   createRosDomainPlugin,
+  rosMessageTypeId,
   rosServiceTypeId,
+  type RosMessage,
 } from "@ggcs/ros";
 import {
   ROS_STD_COMPUTATION_IDS,
@@ -48,6 +52,11 @@ export const SENSOR_SUITE_SATELLITES_TOPIC = "/arnav/satellites" as const;
 export const SENSOR_SUITE_ZED_RGB_TOPIC = "/zed/zed_node/rgb/color/rect/image/compressed" as const;
 export const SENSOR_SUITE_ZED_RGB_MESSAGE_TYPE = "sensor_msgs/msg/CompressedImage" as const;
 
+export const SENSOR_SUITE_PLUGIN_ID = "ggcs:sensor-suite" as const;
+export const SENSOR_SUITE_COMPUTATION_IDS = {
+  compressedImageData: "sensor-suite.compressed-image.data",
+} as const;
+
 export const SENSOR_SUITE_RECORDING_SERVICES = {
   zedStart: "/zed/zed_node/start_svo_rec",
   zedStop: "/zed/zed_node/stop_svo_rec",
@@ -67,6 +76,7 @@ export const SENSOR_SUITE_RESOURCE_IDS = {
   vehicleAccelerationRaw: "vehicle.acceleration.raw",
   arnavSatellitesRaw: "arnav.satellites.raw",
   cameraZedRgbRaw: "camera.zed.rgb.raw",
+  cameraZedRgbData: "camera.zed.rgb.data",
   arnavRollRad: "arnav.roll.rad",
   arnavPitchRad: "arnav.pitch.rad",
   arnavYawRad: "arnav.yaw.rad",
@@ -94,6 +104,33 @@ export const SENSOR_SUITE_RESOURCE_IDS = {
   bagRecordingStop: "bag.recording.stop",
   parameters: "shadow.parameters",
 } as const;
+
+export function projectCompressedImageData(message: RosMessage): string {
+  const data = message.data;
+  if (typeof data !== "string") {
+    throw new Error(`${SENSOR_SUITE_ZED_RGB_MESSAGE_TYPE} field data must be a string`);
+  }
+  return data;
+}
+
+export const compressedImageData = defineValueTransform<RosMessage, string>({
+  id: SENSOR_SUITE_COMPUTATION_IDS.compressedImageData,
+  input: rosMessageTypeId(SENSOR_SUITE_ZED_RGB_MESSAGE_TYPE),
+  output: CORE_TYPE_IDS.string,
+  transform: projectCompressedImageData,
+});
+
+export function createSensorSuitePlugin(): PluginDefinition {
+  return {
+    manifest: {
+      id: SENSOR_SUITE_PLUGIN_ID,
+      version: "0.1.0",
+      ggcsApi: "^0.1.0",
+      requires: [{ id: ROS_PLUGIN_ID, version: "^0.1.0" }],
+    },
+    computations: [compressedImageData],
+  };
+}
 
 function derived(
   id: string,
@@ -200,6 +237,7 @@ export function createSensorSuiteShadowDefinition(options: {
       ROS_STD_MSGS_PLUGIN_ID,
       TRANSFORMS_PLUGIN_ID,
       ARNAV_PLUGIN_ID,
+      SENSOR_SUITE_PLUGIN_ID,
     ],
     resources: [
       {
@@ -241,12 +279,20 @@ export function createSensorSuiteShadowDefinition(options: {
         messageType: ROS_STD_MESSAGE_TYPES.int64,
       }),
       ...(options.includeCamera === true
-        ? [topicSource({
-            id: ids.cameraZedRgbRaw,
-            type: `ros:message/${SENSOR_SUITE_ZED_RGB_MESSAGE_TYPE}`,
-            topic: SENSOR_SUITE_ZED_RGB_TOPIC,
-            messageType: SENSOR_SUITE_ZED_RGB_MESSAGE_TYPE,
-          })]
+        ? [
+            topicSource({
+              id: ids.cameraZedRgbRaw,
+              type: rosMessageTypeId(SENSOR_SUITE_ZED_RGB_MESSAGE_TYPE),
+              topic: SENSOR_SUITE_ZED_RGB_TOPIC,
+              messageType: SENSOR_SUITE_ZED_RGB_MESSAGE_TYPE,
+            }),
+            derived(
+              ids.cameraZedRgbData,
+              CORE_TYPE_IDS.string,
+              SENSOR_SUITE_COMPUTATION_IDS.compressedImageData,
+              ids.cameraZedRgbRaw,
+            ),
+          ]
         : []),
       ...createArnavSemanticResources(ids.arnavInsRaw),
       ...createNumericSemanticResources({
@@ -310,7 +356,8 @@ export function createSensorSuiteShadowRegistry(
     .register(createRosbridgeTransportPlugin(transportOptions))
     .register(createRosStdMsgsPlugin())
     .register(createTransformsPlugin())
-    .register(createArnavPlugin());
+    .register(createArnavPlugin())
+    .register(createSensorSuitePlugin());
 }
 
 export function compileSensorSuiteShadowApplication(options: {

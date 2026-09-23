@@ -36,14 +36,11 @@ export function backendUsesRuntimeForParameters(mode: SensorSuiteBackendMode): b
   return mode === "compat-read" || mode === "compat-full";
 }
 
-/**
- * M04-S5 enables the accepted ParameterProvider compatibility path in compat-read
- * while compat-full remains gated until the compatibility-closure slice lands.
- */
-export function assertM04Slice5ModeSupported(mode: SensorSuiteBackendMode): void {
-  if (mode === "compat-full") {
-    throw new Error(
-      `GGCS backend mode ${mode} is reserved but not enabled in M04-S5; use legacy, shadow, or compat-read until compatibility closure lands`,
-    );
-  }
+export function backendUsesLegacyBindings(mode: SensorSuiteBackendMode): boolean {
+  return mode !== "compat-full";
+}
+
+/** M04-S6 enables compat-full while retaining legacy/shadow/compat-read rollback modes. */
+export function assertM04Slice6ModeSupported(mode: SensorSuiteBackendMode): void {
+  void mode;
 }

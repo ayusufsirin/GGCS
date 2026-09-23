@@ -4,12 +4,14 @@ import { attachConstantBindings, collectConstantBindings } from "./binders/const
 import { attachPublisherBindings, collectPublisherBindings } from "./binders/publishers";
 import { useEffect } from "react";
 import { useRuntimeCompatibility } from "../runtime/compatibility-context";
-import type { SensorSuiteBackendMode } from "../runtime/backend-mode";
+import { backendUsesLegacyBindings, type SensorSuiteBackendMode } from "../runtime/backend-mode";
 import { filterLegacySubscriberBindingsForMode } from "../runtime/telemetry-cutover";
 import { filterLegacyServiceBindingsForMode } from "../runtime/action-cutover";
 import { filterLegacyParameterServiceBindingsForMode } from "../runtime/parameter-cutover";
 
 export function attachAllBindingsForMode(config: unknown, mode: SensorSuiteBackendMode) {
+  if (!backendUsesLegacyBindings(mode)) return () => undefined;
+
   const topics = filterLegacySubscriberBindingsForMode(mode, collectSubscriberBindings(config));
   const actionFilteredServices = filterLegacyServiceBindingsForMode(mode, collectServiceBindings(config));
   const services = filterLegacyParameterServiceBindingsForMode(mode, actionFilteredServices);

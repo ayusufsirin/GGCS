@@ -16,6 +16,8 @@ function useService<TReq = any, TRes = any>(attrName: string) {
     backendUsesRuntimeForActions(runtimeCompatibility.mode) &&
     isM04Slice4RuntimeProcedurePort(ctx.instanceId, attrName);
 
+  const fullModeUnmapped = runtimeCompatibility.mode === "compat-full" && !runtimeAction;
+
   const runtimeProcedure = runtimeAction
     ? runtimeCompatibility.resourceForPort<Procedure<TReq, TRes>>(ctx.instanceId, attrName)
     : undefined;
@@ -26,6 +28,9 @@ function useService<TReq = any, TRes = any>(attrName: string) {
     throw new Error(
       `GGCS compat action Procedure unavailable for ${ctx.instanceId}::${attrName}`,
     );
+  }
+  if (fullModeUnmapped) {
+    throw new Error(`GGCS compat-full has no Runtime Procedure mapping for ${ctx.instanceId}::${attrName}`);
   }
 
   return useMemo(

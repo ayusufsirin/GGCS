@@ -62,7 +62,7 @@ describe("Sensor Suite Web application lifecycle", () => {
     expect(runtime.stops).toBe(1);
   });
 
-  test("compat-read owns one Runtime while compat-full remains gated", async () => {
+  test("compat-read owns one Runtime", async () => {
     const runtime = new FakeRuntime();
     const createRuntime = jest.fn(() => runtime);
     const app = createSensorSuiteWebApplication(
@@ -75,10 +75,23 @@ describe("Sensor Suite Web application lifecycle", () => {
     expect(runtime.starts).toBe(1);
     expect(app.compatibility.runtimeState()).toBe("running");
     await app.stop();
+  });
 
-    expect(() => createSensorSuiteWebApplication(
-      { mode: "compat-full", rosbridgeUrl: "ws://unused.invalid:9090" },
+  test("compat-full owns one Runtime and forces the active camera compatibility Source on", async () => {
+    const runtime = new FakeRuntime();
+    const createRuntime = jest.fn(() => runtime);
+    const app = createSensorSuiteWebApplication(
+      { mode: "compat-full", rosbridgeUrl: "ws://full.invalid:9090", includeCamera: false },
       { createRuntime },
-    )).toThrow(/not enabled in M04-S5/);
+    );
+
+    await app.start();
+    expect(createRuntime).toHaveBeenCalledWith({
+      mode: "compat-full",
+      rosbridgeUrl: "ws://full.invalid:9090",
+      includeCamera: true,
+    });
+    expect(runtime.starts).toBe(1);
+    await app.stop();
   });
 });

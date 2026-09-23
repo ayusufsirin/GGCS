@@ -17,8 +17,8 @@ async function startWebApplication() {
   });
 
   // Shadow Runtime failure must not take down the authoritative legacy UI.
-  // compat-read is authoritative for the mapped S3 telemetry ports, so its
-  // startup never silently falls back to legacy. compat-full remains gated.
+  // compat-read/full are authoritative for their mapped Runtime paths, so
+  // startup never silently falls back to legacy. Rollback is mode + restart.
   try {
     await application.start();
   } catch (error) {
