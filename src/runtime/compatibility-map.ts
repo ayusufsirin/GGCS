@@ -1,6 +1,6 @@
 import { SENSOR_SUITE_RESOURCE_IDS } from "@ggcs/sensor-suite";
 
-export type CompatibilityBindingKind = "source" | "procedure" | "parameterProvider";
+export type CompatibilityBindingKind = "source" | "command" | "procedure" | "parameterProvider";
 
 export interface CompatibilityBinding {
   readonly kind: CompatibilityBindingKind;
@@ -92,47 +92,16 @@ export const SENSOR_SUITE_COMPATIBILITY_BINDINGS: CompatibilityBindingMap = {
   },
 };
 
-/**
- * M04-S3 makes every explicitly mapped semantic Source port authoritative in
- * compat-read. Procedure and ParameterProvider bindings remain reserved for
- * later slices, and the camera is intentionally absent so its legacy
- * subscription can remain as the documented opt-in exception.
- */
-export function isM04Slice3RuntimeReadPort(instanceId: string, portName: string): boolean {
-  if (instanceId === "tabs.items.images.grids.items.zedRgb" && portName === "image") return false;
+/** Runtime-only migration helpers retained until semantic Presentation extraction. */
+export function isCompatibilitySourcePort(instanceId: string, portName: string): boolean {
   return resolveCompatibilityBinding(instanceId, portName)?.kind === "source";
 }
 
-/** M04-S6 closes telemetry compatibility by including the proven camera Source. */
-export function isM04Slice6RuntimeReadPort(instanceId: string, portName: string): boolean {
-  return resolveCompatibilityBinding(instanceId, portName)?.kind === "source";
+export function isCompatibilityProcedurePort(instanceId: string, portName: string): boolean {
+  return resolveCompatibilityBinding(instanceId, portName)?.kind === "procedure";
 }
 
-const M04_SLICE4_RUNTIME_PROCEDURE_PORTS = new Set([
-  "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.zedStartSvo::callService",
-  "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.bagStartRecord::callService",
-  "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.bagStopRecord::callService",
-  "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.zedStopSvo::callService",
-]);
-
-/**
- * M04-S4 migrates recording actions one at a time. Action 04 completes the
- * recording cutover by adding Start SVO after both ROS Bag actions and Stop SVO
- * were accepted. The existing request object is passed through unchanged so the
- * module-load timestamp behavior remains exactly as before during compatibility.
- */
-export function isM04Slice4RuntimeProcedurePort(instanceId: string, portName: string): boolean {
-  const binding = resolveCompatibilityBinding(instanceId, portName);
-  return binding?.kind === "procedure" &&
-    M04_SLICE4_RUNTIME_PROCEDURE_PORTS.has(`${instanceId}::${portName}`);
-}
-
-
-/**
- * M04-S5 makes the explicit ROSParametersWidget ParameterProvider capability
- * authoritative in compat-read. Legacy mode remains the restart-based rollback.
- */
-export function isM04Slice5RuntimeParameterCapability(
+export function isCompatibilityParameterCapability(
   instanceId: string,
   capabilityName: string,
 ): boolean {

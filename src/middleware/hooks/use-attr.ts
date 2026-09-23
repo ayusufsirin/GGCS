@@ -1,17 +1,12 @@
 import { useContext, useEffect, useState } from "react";
 import type { Observation, Source } from "@ggcs/core";
-import { instanceStore } from "../instance-store";
 import { Ctx } from "./common";
-import { backendUsesRuntimeForTelemetry } from "../../runtime/backend-mode";
-import {
-  isM04Slice3RuntimeReadPort,
-  isM04Slice6RuntimeReadPort,
-} from "../../runtime/compatibility-map";
 import { useRuntimeCompatibility } from "../../runtime/compatibility-context";
 
 /**
- * Project the richer GGCS Observation envelope back into the naked value shape
- * expected by legacy widgets during M04 compatibility.
+ * Temporary projection for React widgets that have not yet moved to the final
+ * Observation-aware renderer hooks. Fresh/stale retain values, last-good is
+ * preserved for errors, and unavailable falls back to the supplied initial.
  */
 export function projectObservationToLegacyValue<T>(
   observation: Observation<T>,
@@ -26,46 +21,40 @@ export function projectObservationToLegacyValue<T>(
   return initial;
 }
 
-/** Widgets call this with just the attribute name declared in their spec. */
+/** Widgets call this with the attribute name declared by the migration map. */
 export function useAttr<T = any>(attrName: string, initial?: T) {
   const ctx = useContext(Ctx);
   if (!ctx) throw new Error("useAttr must be used within <WidgetAttrProvider>");
 
   const runtimeCompatibility = useRuntimeCompatibility();
-  const runtimeRead =
-    runtimeCompatibility.mode === "compat-full"
-      ? isM04Slice6RuntimeReadPort(ctx.instanceId, attrName)
-      : backendUsesRuntimeForTelemetry(runtimeCompatibility.mode) &&
-        isM04Slice3RuntimeReadPort(ctx.instanceId, attrName);
-  const fullModeUnmapped = runtimeCompatibility.mode === "compat-full" && !runtimeRead;
+  const binding = runtimeCompatibility.resolvePort(ctx.instanceId, attrName);
+  if (binding && binding.kind !== "source") {
+    throw new Error(`GGCS port ${ctx.instanceId}::${attrName} is not a Source`);
+  }
 
-  const runtimeSource = runtimeRead
+  const runtimeSource = binding
     ? runtimeCompatibility.resourceForPort<Source<T>>(ctx.instanceId, attrName)
     : undefined;
 
-  // Authoritative compatibility modes never silently fall back to legacy for a
-  // port that has been explicitly cut over. Rollback is mode selection + restart.
-  if (runtimeRead && (!runtimeSource || runtimeSource.kind !== "source")) {
-    throw new Error(
-      `GGCS ${runtimeCompatibility.mode} source unavailable for ${ctx.instanceId}::${attrName}`,
-    );
-  }
-  if (fullModeUnmapped) {
-    throw new Error(`GGCS compat-full has no Runtime Source mapping for ${ctx.instanceId}::${attrName}`);
+  if (binding && (!runtimeSource || runtimeSource.kind !== "source")) {
+    throw new Error(`GGCS Runtime Source unavailable for ${ctx.instanceId}::${attrName}`);
   }
 
   const [val, setVal] = useState<T | undefined>(initial);
 
   useEffect(() => {
-    if (runtimeRead) {
-      const subscription = runtimeSource!.subscribe((observation) => {
-        setVal(projectObservationToLegacyValue(observation, initial));
-      });
-      return () => subscription.unsubscribe();
+    // Unbound attrs are optional compatibility inputs/local visual defaults.
+    // Critically, they no longer fall back to any singleton middleware store.
+    if (!runtimeSource) {
+      setVal(initial);
+      return;
     }
 
-    return instanceStore.on<T>(ctx.instanceId, attrName, setVal);
-  }, [ctx.instanceId, attrName, initial, runtimeRead, runtimeSource]);
+    const subscription = runtimeSource.subscribe((observation) => {
+      setVal(projectObservationToLegacyValue(observation, initial));
+    });
+    return () => subscription.unsubscribe();
+  }, [initial, runtimeSource]);
 
   return val;
 }

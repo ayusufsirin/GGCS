@@ -1,50 +1,49 @@
 import React from "react";
-import { act, render } from "@testing-library/react";
-import { publisherBus } from "../publisher-bus";
+import { render } from "@testing-library/react";
+import type { Command } from "@ggcs/core";
 import { RuntimeCompatibilityProvider } from "../../runtime/compatibility-context";
 import type { SensorSuiteCompatibilityAccess } from "../../runtime/sensor-suite-application";
 import { WidgetAttrProvider } from "./common";
 import { usePublisher } from "./use-publisher";
 
-function access(mode: SensorSuiteCompatibilityAccess["mode"]): SensorSuiteCompatibilityAccess {
-  return {
-    mode,
-    runtimeEnabled: mode !== "legacy",
-    runtimeState: () => (mode === "legacy" ? "disabled" : "running"),
-    resolvePort: () => undefined,
-    resolveCapability: () => undefined,
-    resourceForPort: () => undefined,
-    resourceForCapability: () => undefined,
-  };
-}
-
-function capturePublisher(mode: SensorSuiteCompatibilityAccess["mode"]) {
-  let publish: ((value: unknown) => void) | undefined;
-  function Probe() { publish = usePublisher("command"); return null; }
+function capturePublisher(access: SensorSuiteCompatibilityAccess) {
+  let publish: ((value: number) => unknown) | undefined;
+  function Probe() {
+    publish = usePublisher<number>("command");
+    return null;
+  }
   render(
-    <RuntimeCompatibilityProvider access={access(mode)}>
+    <RuntimeCompatibilityProvider access={access}>
       <WidgetAttrProvider instanceId="test.publisher"><Probe /></WidgetAttrProvider>
     </RuntimeCompatibilityProvider>,
   );
-  if (!publish) throw new Error("publisher not captured");
-  return publish;
+  return (value: number) => publish!(value);
 }
 
-describe("M04-S6 publisher compatibility closure", () => {
-  test("compat-full never consults publisherBus for an unmapped Command", () => {
-    const get = jest.spyOn(publisherBus, "get");
-    const publish = capturePublisher("compat-full");
-    expect(() => publish({ value: 1 })).toThrow(/compat-full has no Runtime Command mapping/);
-    expect(get).not.toHaveBeenCalled();
+describe("M05 Runtime-only Command compatibility hook", () => {
+  test("dispatches a mapped Runtime Command", async () => {
+    const send = jest.fn(async () => ({ dispatchedAt: 1 }));
+    const command = { kind: "command", id: "test.command", send } as unknown as Command<number>;
+    const access: SensorSuiteCompatibilityAccess = {
+      runtimeState: () => "running",
+      resolvePort: () => ({ kind: "command", resourceId: "test.command" }),
+      resolveCapability: () => undefined,
+      resourceForPort: () => command as any,
+      resourceForCapability: () => undefined,
+    };
+    await capturePublisher(access)(3);
+    expect(send).toHaveBeenCalledWith(3);
   });
 
-  test("legacy rollback retains publisherBus behavior", () => {
-    const legacy = jest.fn();
-    const off = publisherBus.register("test.publisher", "command", legacy);
-    try {
-      const publish = capturePublisher("legacy");
-      act(() => publish({ value: 2 }));
-      expect(legacy).toHaveBeenCalledWith({ value: 2 });
-    } finally { off(); }
+  test("unmapped Commands fail closed instead of consulting a legacy publisher bus", () => {
+    const access: SensorSuiteCompatibilityAccess = {
+      runtimeState: () => "running",
+      resolvePort: () => undefined,
+      resolveCapability: () => undefined,
+      resourceForPort: () => undefined,
+      resourceForCapability: () => undefined,
+    };
+    const publish = capturePublisher(access);
+    expect(() => publish(1)).toThrow(/no Runtime Command mapping/);
   });
 });

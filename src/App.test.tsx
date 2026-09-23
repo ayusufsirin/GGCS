@@ -7,17 +7,15 @@ jest.mock('./bootstrap', () => ({
   Dashboard: () => <div>GGCS dashboard</div>,
 }));
 
-const legacyAccess: SensorSuiteCompatibilityAccess = {
-  mode: 'legacy',
-  runtimeEnabled: false,
-  runtimeState: () => 'disabled',
+const runtimeAccess: SensorSuiteCompatibilityAccess = {
+  runtimeState: () => 'running',
   resolvePort: () => undefined,
   resolveCapability: () => undefined,
   resourceForPort: () => undefined,
   resourceForCapability: () => undefined,
 };
 
-test('renders the existing Dashboard beneath the M04 compatibility provider', () => {
-  render(<App runtimeCompatibility={legacyAccess} />);
+test('renders the existing Dashboard beneath the temporary Runtime access provider', () => {
+  render(<App runtimeCompatibility={runtimeAccess} />);
   expect(screen.getByText('GGCS dashboard')).toBeInTheDocument();
 });

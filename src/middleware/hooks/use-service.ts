@@ -1,9 +1,6 @@
 import { useContext, useMemo, useState } from "react";
 import type { Procedure } from "@ggcs/core";
 import { Ctx } from "./common";
-import { serviceBus, svcKey } from "../service-bus";
-import { backendUsesRuntimeForActions } from "../../runtime/backend-mode";
-import { isM04Slice4RuntimeProcedurePort } from "../../runtime/compatibility-map";
 import { useRuntimeCompatibility } from "../../runtime/compatibility-context";
 
 function useService<TReq = any, TRes = any>(attrName: string) {
@@ -11,38 +8,22 @@ function useService<TReq = any, TRes = any>(attrName: string) {
   if (!ctx) throw new Error("useService must be used within <WidgetAttrProvider>");
 
   const runtimeCompatibility = useRuntimeCompatibility();
-  const key = useMemo(() => svcKey(ctx.instanceId, attrName), [ctx.instanceId, attrName]);
-  const runtimeAction =
-    backendUsesRuntimeForActions(runtimeCompatibility.mode) &&
-    isM04Slice4RuntimeProcedurePort(ctx.instanceId, attrName);
-
-  const fullModeUnmapped = runtimeCompatibility.mode === "compat-full" && !runtimeAction;
-
-  const runtimeProcedure = runtimeAction
-    ? runtimeCompatibility.resourceForPort<Procedure<TReq, TRes>>(ctx.instanceId, attrName)
-    : undefined;
-
-  // A cut-over action must never silently fall back to the legacy service bus.
-  // Rollback is explicit backend mode selection plus process/page restart.
-  if (runtimeAction && (!runtimeProcedure || runtimeProcedure.kind !== "procedure")) {
-    throw new Error(
-      `GGCS compat action Procedure unavailable for ${ctx.instanceId}::${attrName}`,
-    );
+  const binding = runtimeCompatibility.resolvePort(ctx.instanceId, attrName);
+  if (!binding || binding.kind !== "procedure") {
+    throw new Error(`GGCS has no Runtime Procedure mapping for ${ctx.instanceId}::${attrName}`);
   }
-  if (fullModeUnmapped) {
-    throw new Error(`GGCS compat-full has no Runtime Procedure mapping for ${ctx.instanceId}::${attrName}`);
+
+  const runtimeProcedure = runtimeCompatibility.resourceForPort<Procedure<TReq, TRes>>(
+    ctx.instanceId,
+    attrName,
+  );
+  if (!runtimeProcedure || runtimeProcedure.kind !== "procedure") {
+    throw new Error(`GGCS Runtime Procedure unavailable for ${ctx.instanceId}::${attrName}`);
   }
 
   return useMemo(
-    () => (req: TReq, opts?: { timeoutMs?: number }) => {
-      if (runtimeAction) {
-        // Runtime Procedure timeout policy belongs to its compiled definition.
-        // The legacy per-call opts shape remains for non-migrated services only.
-        return runtimeProcedure!.invoke(req).result();
-      }
-      return serviceBus.call<TRes>(key, req, opts);
-    },
-    [key, runtimeAction, runtimeProcedure],
+    () => (req: TReq, _opts?: { timeoutMs?: number }) => runtimeProcedure.invoke(req).result(),
+    [runtimeProcedure],
   );
 }
 

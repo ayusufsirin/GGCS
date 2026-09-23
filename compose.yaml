@@ -49,7 +49,6 @@ services:
       HOST: 0.0.0.0
       WATCHPACK_POLLING: "true"
       REACT_APP_GGCS_ROSBRIDGE_URL: ${REACT_APP_GGCS_ROSBRIDGE_URL:-ws://localhost:9090}
-      REACT_APP_GGCS_BACKEND_MODE: ${REACT_APP_GGCS_BACKEND_MODE:-legacy}
     ports:
       - "${GGCS_WEB_DEV_PORT:-3000}:3000"
     volumes:
@@ -67,7 +66,6 @@ services:
         NODE_VERSION: ${GGCS_NODE_VERSION:-22.23.2}
         PNPM_VERSION: ${GGCS_PNPM_VERSION:-10.34.5}
         REACT_APP_GGCS_ROSBRIDGE_URL: ${REACT_APP_GGCS_ROSBRIDGE_URL:-ws://localhost:9090}
-        REACT_APP_GGCS_BACKEND_MODE: ${REACT_APP_GGCS_BACKEND_MODE:-legacy}
     ports:
       - "${GGCS_WEB_PROD_PORT:-8080}:80"
     restart: unless-stopped
@@ -139,9 +137,22 @@ services:
         NODE_VERSION: ${GGCS_NODE_VERSION:-22.23.2}
         PNPM_VERSION: ${GGCS_PNPM_VERSION:-10.34.5}
     environment:
-      REACT_APP_GGCS_BACKEND_MODE: legacy
       REACT_APP_GGCS_ROSBRIDGE_URL: ws://localhost:9090
     command: ["pnpm", "run", "verify:m04"]
+
+  m05-verify:
+    profiles: ["m05"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: m05-verify
+      args:
+        <<: *registry-build-args
+        NODE_VERSION: ${GGCS_NODE_VERSION:-22.23.2}
+        PNPM_VERSION: ${GGCS_PNPM_VERSION:-10.34.5}
+    environment:
+      REACT_APP_GGCS_ROSBRIDGE_URL: ws://localhost:9090
+    command: ["pnpm", "run", "verify:m05"]
 
   m02-connection-smoke:
     profiles: ["m02"]

@@ -26,7 +26,7 @@ RUN ggcs-configure-registries \
     && corepack enable \
     && corepack prepare "pnpm@${PNPM_VERSION}" --activate
 
-# M04 Web consumes monorepo workspace packages. Keep the Web image on the same
+# The Web app consumes monorepo workspace packages. Keep the Web image on the same
 # canonical package-manager boundary instead of the legacy isolated npm install.
 COPY . .
 RUN --mount=type=cache,id=ggcs-web-pnpm-store,target=/pnpm/store,sharing=locked \

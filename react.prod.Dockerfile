@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Multi-stage production build for the React application with M04 workspace packages.
+# Multi-stage production build for the React application with workspace packages.
 
 ARG DOCKER_REGISTRY=docker.io
 ARG NODE_VERSION=22.23.2
@@ -8,7 +8,6 @@ FROM ${DOCKER_REGISTRY}/library/node:${NODE_VERSION}-bookworm AS builder
 
 ARG PNPM_VERSION
 ARG REACT_APP_GGCS_ROSBRIDGE_URL
-ARG REACT_APP_GGCS_BACKEND_MODE=legacy
 ARG NEXUS_NPM_REGISTRY=""
 ARG NEXUS_PYPI_INDEX_URL=""
 ARG NEXUS_APT_DEBIAN_URL=""
@@ -19,7 +18,6 @@ ARG NEXUS_APT_UBUNTU_PORTS_URL=""
 ARG NEXUS_APT_ROS2_URL=""
 
 ENV REACT_APP_GGCS_ROSBRIDGE_URL=${REACT_APP_GGCS_ROSBRIDGE_URL}
-ENV REACT_APP_GGCS_BACKEND_MODE=${REACT_APP_GGCS_BACKEND_MODE}
 WORKDIR /app
 
 COPY docker/nexus/configure-registries.sh /usr/local/bin/ggcs-configure-registries

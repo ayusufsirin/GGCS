@@ -5,7 +5,11 @@ jest.mock("@ggcs/sensor-suite", () => ({
 }));
 
 jest.mock("./compatibility-map", () => ({
-  resolveCompatibilityBinding: jest.fn(() => undefined),
+  resolveCompatibilityBinding: jest.fn((instanceId: string, portName: string) =>
+    instanceId === "widget" && portName === "value"
+      ? { kind: "source", resourceId: "resource.value" }
+      : undefined,
+  ),
   resolveCompatibilityCapability: jest.fn(() => undefined),
 }));
 
@@ -28,32 +32,20 @@ class FakeRuntime implements SensorSuiteRuntimeLike {
   }
 }
 
-describe("Sensor Suite Web application lifecycle", () => {
-  test("legacy mode does not create or start a Runtime", async () => {
-    const createRuntime = jest.fn(() => new FakeRuntime());
-    const app = createSensorSuiteWebApplication(
-      { mode: "legacy", rosbridgeUrl: "ws://unused.invalid:9090" },
-      { createRuntime },
-    );
-
-    await app.start();
-    await app.stop();
-
-    expect(createRuntime).not.toHaveBeenCalled();
-    expect(app.compatibility.runtimeState()).toBe("disabled");
-  });
-
-  test("shadow mode owns one Runtime across repeated start calls and stops it once", async () => {
+describe("M05 Sensor Suite Web application lifecycle", () => {
+  test("always owns exactly one Runtime and stops it once", async () => {
     const runtime = new FakeRuntime();
     const createRuntime = jest.fn(() => runtime);
     const app = createSensorSuiteWebApplication(
-      { mode: "shadow", rosbridgeUrl: "ws://shadow.invalid:9090" },
+      { rosbridgeUrl: "ws://runtime.invalid:9090" },
       { createRuntime },
     );
 
+    expect(app.compatibility.runtimeState()).toBe("created");
     await app.start();
     await app.start();
     expect(createRuntime).toHaveBeenCalledTimes(1);
+    expect(createRuntime).toHaveBeenCalledWith({ rosbridgeUrl: "ws://runtime.invalid:9090" });
     expect(runtime.starts).toBe(1);
     expect(app.compatibility.runtimeState()).toBe("running");
 
@@ -62,36 +54,28 @@ describe("Sensor Suite Web application lifecycle", () => {
     expect(runtime.stops).toBe(1);
   });
 
-  test("compat-read owns one Runtime", async () => {
+  test("resolves only explicitly mapped resources after Runtime start", async () => {
     const runtime = new FakeRuntime();
-    const createRuntime = jest.fn(() => runtime);
+    const source = { kind: "source", id: "resource.value" } as RuntimeResource;
+    runtime.resources.set("resource.value", source);
     const app = createSensorSuiteWebApplication(
-      { mode: "compat-read", rosbridgeUrl: "ws://compat.invalid:9090" },
-      { createRuntime },
+      { rosbridgeUrl: "ws://runtime.invalid:9090" },
+      { createRuntime: () => runtime },
     );
 
+    expect(app.compatibility.resourceForPort("widget", "value")).toBeUndefined();
     await app.start();
-    expect(createRuntime).toHaveBeenCalledTimes(1);
-    expect(runtime.starts).toBe(1);
-    expect(app.compatibility.runtimeState()).toBe("running");
-    await app.stop();
+    expect(app.compatibility.resourceForPort("widget", "value")).toBe(source);
+    expect(app.compatibility.resourceForPort("widget", "missing")).toBeUndefined();
   });
 
-  test("compat-full owns one Runtime and forces the active camera compatibility Source on", async () => {
-    const runtime = new FakeRuntime();
-    const createRuntime = jest.fn(() => runtime);
+  test("cannot restart after stop", async () => {
     const app = createSensorSuiteWebApplication(
-      { mode: "compat-full", rosbridgeUrl: "ws://full.invalid:9090", includeCamera: false },
-      { createRuntime },
+      { rosbridgeUrl: "ws://runtime.invalid:9090" },
+      { createRuntime: () => new FakeRuntime() },
     );
-
     await app.start();
-    expect(createRuntime).toHaveBeenCalledWith({
-      mode: "compat-full",
-      rosbridgeUrl: "ws://full.invalid:9090",
-      includeCamera: true,
-    });
-    expect(runtime.starts).toBe(1);
     await app.stop();
+    await expect(app.start()).rejects.toThrow(/cannot restart/);
   });
 });

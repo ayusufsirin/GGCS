@@ -7,9 +7,7 @@ import {
 import type { SensorSuiteCompatibilityAccess } from "./sensor-suite-application";
 
 const access: SensorSuiteCompatibilityAccess = {
-  mode: "legacy",
-  runtimeEnabled: false,
-  runtimeState: () => "disabled",
+  runtimeState: () => "running",
   resolvePort: () => undefined,
   resolveCapability: () => undefined,
   resourceForPort: () => undefined,
@@ -18,16 +16,16 @@ const access: SensorSuiteCompatibilityAccess = {
 
 function Probe() {
   const runtime = useRuntimeCompatibility();
-  return <span>{runtime.mode}:{runtime.runtimeState()}</span>;
+  return <span>{runtime.runtimeState()}</span>;
 }
 
 describe("RuntimeCompatibilityProvider", () => {
-  test("exposes constrained application access rather than an unrestricted Runtime", () => {
+  test("exposes constrained Runtime access rather than an unrestricted Runtime", () => {
     render(
       <RuntimeCompatibilityProvider access={access}>
         <Probe />
       </RuntimeCompatibilityProvider>,
     );
-    expect(screen.getByText("legacy:disabled")).toBeInTheDocument();
+    expect(screen.getByText("running")).toBeInTheDocument();
   });
 });

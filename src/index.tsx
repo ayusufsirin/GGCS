@@ -3,28 +3,19 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
-import { parseSensorSuiteBackendMode } from './runtime/backend-mode';
 import { resolveRosbridgeUrl } from './runtime/rosbridge-url';
 import { createSensorSuiteWebApplication } from './runtime/sensor-suite-application';
 
 async function startWebApplication() {
-  const mode = parseSensorSuiteBackendMode(process.env.REACT_APP_GGCS_BACKEND_MODE);
   const application = createSensorSuiteWebApplication({
-    mode,
     rosbridgeUrl: resolveRosbridgeUrl({
       envUrl: process.env.REACT_APP_GGCS_ROSBRIDGE_URL,
     }),
   });
 
-  // Shadow Runtime failure must not take down the authoritative legacy UI.
-  // compat-read/full are authoritative for their mapped Runtime paths, so
-  // startup never silently falls back to legacy. Rollback is mode + restart.
-  try {
-    await application.start();
-  } catch (error) {
-    if (mode !== 'shadow') throw error;
-    console.error('GGCS shadow Runtime failed to start; continuing with legacy UI', error);
-  }
+  // M05 removes the legacy/shadow rollback stack: Runtime startup is now the
+  // sole application backend and failures are surfaced rather than bypassed.
+  await application.start();
 
   const root = ReactDOM.createRoot(
     document.getElementById('root') as HTMLElement

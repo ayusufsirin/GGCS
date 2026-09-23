@@ -22,7 +22,6 @@
     "react-drone-hud": "^0.0.1-rc0",
     "react-leaflet": "^5.0.0-rc.2",
     "react-scripts": "5.0.1",
-    "roslib": "^1.4.1",
     "typescript": "^4.9.5",
     "web-vitals": "^2.1.4",
     "@ggcs/core": "workspace:*",
@@ -82,7 +81,12 @@
     "test:m04:web": "react-scripts test --watchAll=false --runInBand",
     "check:m04-boundaries": "node scripts/check-m04-boundaries.mjs",
     "verify:m04": "pnpm run verify:m03 && pnpm run build:m04:web && pnpm run test:m04:web && pnpm run check:m04-boundaries",
-    "docker:m04:verify": "docker compose --profile m04 run --rm --build m04-verify"
+    "docker:m04:verify": "docker compose --profile m04 run --rm --build m04-verify",
+    "build:m05:web": "CI=false react-scripts build",
+    "test:m05:web": "react-scripts test --watchAll=false --runInBand",
+    "check:m05-boundaries": "node scripts/check-m05-boundaries.mjs",
+    "verify:m05": "pnpm run verify:m03 && pnpm run build:m05:web && pnpm run test:m05:web && pnpm run check:m05-boundaries",
+    "docker:m05:verify": "docker compose --profile m05 run --rm --build m05-verify"
   },
   "eslintConfig": {
     "extends": [
@@ -101,9 +105,6 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
-  },
-  "devDependencies": {
-    "@types/roslib": "^1.3.5"
   },
   "overrides": {
     "react-drone-hud": {
