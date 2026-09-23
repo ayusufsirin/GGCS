@@ -3,6 +3,7 @@ import { render } from "@testing-library/react";
 import { Dashboard } from "./bootstrap";
 
 jest.mock("./config", () => ({ config: {} }));
+jest.mock("./widgets/widgets", () => ({ WIDGETS: {} }));
 
 describe("M05 Dashboard shell", () => {
   test("renders without mounting any legacy binding bridge", () => {

@@ -2,15 +2,30 @@ jest.mock("@ggcs/sensor-suite", () => ({
   compileSensorSuiteApplication: jest.fn(() => {
     throw new Error("production compiler must not be used by injected lifecycle tests");
   }),
-}));
-
-jest.mock("./compatibility-map", () => ({
-  resolveCompatibilityBinding: jest.fn((instanceId: string, portName: string) =>
-    instanceId === "widget" && portName === "value"
-      ? { kind: "source", resourceId: "resource.value" }
-      : undefined,
-  ),
-  resolveCompatibilityCapability: jest.fn(() => undefined),
+  SENSOR_SUITE_RESOURCE_IDS: {
+    navRollDeg: "nav.roll.deg",
+    navPitchDeg: "nav.pitch.deg",
+    navHeadingDeg: "nav.heading.deg",
+    vehicleSpeed: "resource.value",
+    navAltitudeM: "nav.altitude.m",
+    navLatitudeDeg: "nav.latitude.deg",
+    navLongitudeDeg: "nav.longitude.deg",
+    arnavSatellites: "arnav.satellites",
+    healthSystem: "arnav.health.system",
+    healthRollPitch: "arnav.health.rollPitch",
+    healthYaw: "arnav.health.yaw",
+    healthPositionVelocity: "arnav.health.positionVelocity",
+    healthMagnetometer: "arnav.health.magnetometer",
+    healthGnssFixed: "arnav.health.gnssFixed",
+    rtkFixedLegacy: "arnav.display.rtkFixedLegacy",
+    vehicleAcceleration: "vehicle.acceleration",
+    cameraZedRgbData: "camera.zed.rgb.data",
+    zedRecordingStart: "zed.recording.start",
+    zedRecordingStop: "zed.recording.stop",
+    bagRecordingStart: "bag.recording.start",
+    bagRecordingStop: "bag.recording.stop",
+    parameters: "shadow.parameters",
+  },
 }));
 
 import type { RuntimeResource, RuntimeState } from "@ggcs/core";
@@ -63,10 +78,10 @@ describe("M05 Sensor Suite Web application lifecycle", () => {
       { createRuntime: () => runtime },
     );
 
-    expect(app.compatibility.resourceForPort("widget", "value")).toBeUndefined();
+    expect(app.compatibility.resourceForPort("tabs.items.home.grids.items.panel.tabs.items.gauges.grids.items.speed", "value")).toBeUndefined();
     await app.start();
-    expect(app.compatibility.resourceForPort("widget", "value")).toBe(source);
-    expect(app.compatibility.resourceForPort("widget", "missing")).toBeUndefined();
+    expect(app.compatibility.resourceForPort("tabs.items.home.grids.items.panel.tabs.items.gauges.grids.items.speed", "value")).toBe(source);
+    expect(app.compatibility.resourceForPort("tabs.items.home.grids.items.panel.tabs.items.gauges.grids.items.speed", "missing")).toBeUndefined();
   });
 
   test("cannot restart after stop", async () => {
