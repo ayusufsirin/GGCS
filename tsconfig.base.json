@@ -53,6 +53,9 @@
       ],
       "@ggcs/renderer-react": [
         "packages/renderer-react/src/index.ts"
+      ],
+      "@ggcs/widgets-react": [
+        "packages/widgets-react/src/index.ts"
       ]
     },
     "lib": [

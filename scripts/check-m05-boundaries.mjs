@@ -271,6 +271,94 @@ for (const requiredStep of ["build:m05:renderer-react", "test:m05:renderer-react
 if (!dockerfile.includes("COPY packages/renderer-react/package.json packages/renderer-react/package.json")) {
   violations.push("Docker dependency stage must copy @ggcs/renderer-react package.json so its dependencies are installed");
 }
+
+
+// M05-S4 reusable semantic React widget implementation package boundaries.
+const widgetsReactRoot = "packages/widgets-react";
+if (!exists(widgetsReactRoot)) {
+  violations.push("M05-S4 is missing packages/widgets-react");
+} else {
+  const widgetsReactPackage = JSON.parse(read(`${widgetsReactRoot}/package.json`));
+  if (widgetsReactPackage.name !== "@ggcs/widgets-react") {
+    violations.push("M05-S4 React widget package must be named @ggcs/widgets-react");
+  }
+
+  const allowedWidgetsReactRuntimeDeps = new Set(["@ggcs/renderer-react", "@ggcs/widgets"]);
+  for (const dependency of Object.keys(widgetsReactPackage.dependencies ?? {})) {
+    if (!allowedWidgetsReactRuntimeDeps.has(dependency)) {
+      violations.push(`@ggcs/widgets-react has forbidden runtime dependency ${dependency}`);
+    }
+  }
+  if (!widgetsReactPackage.peerDependencies?.react) {
+    violations.push("@ggcs/widgets-react must declare React as a peer dependency");
+  }
+  if (widgetsReactPackage.devDependencies?.react !== reactVersion || widgetsReactPackage.devDependencies?.["react-dom"] !== reactDomVersion) {
+    violations.push("@ggcs/widgets-react test React/React-DOM versions must match the exact root Web runtime pair");
+  }
+
+  const forbiddenWidgetsReactImports = [
+    "roslib",
+    "leaflet",
+    "react-leaflet",
+    "@ggcs/transport-rosbridge",
+    "@ggcs/sensor-suite",
+    "@ggcs/arnav",
+  ];
+  const widgetsReactSourceFiles = walk(path.join(root, widgetsReactRoot, "src")).filter((file) => /\.(ts|tsx|js|jsx)$/.test(file));
+  const widgetsReactImportPattern = /(?:from\s+|import\s*\()(["'])([^"']+)\1/g;
+  for (const file of widgetsReactSourceFiles) {
+    const content = fs.readFileSync(file, "utf8");
+    for (const token of ["useAttr", "instanceStore", "publisherBus", "serviceBus", "useRuntimeCompatibility"]) {
+      if (content.includes(token)) {
+        violations.push(`@ggcs/widgets-react retains migration/legacy access token ${token}: ${path.relative(root, file)}`);
+      }
+    }
+    for (const match of content.matchAll(widgetsReactImportPattern)) {
+      const specifier = match[2];
+      for (const forbidden of forbiddenWidgetsReactImports) {
+        if (specifier === forbidden || specifier.startsWith(`${forbidden}/`)) {
+          violations.push(`@ggcs/widgets-react imports forbidden transport/application dependency ${specifier}: ${path.relative(root, file)}`);
+        }
+      }
+    }
+  }
+
+  const gaugeReact = read(`${widgetsReactRoot}/src/GaugeWidget.tsx`);
+  const statusReact = read(`${widgetsReactRoot}/src/StatusWidget.tsx`);
+  for (const [name, content] of [["GaugeWidget", gaugeReact], ["StatusWidget", statusReact]]) {
+    if (!content.includes("useWidgetInputObservation")) {
+      violations.push(`@ggcs/widgets-react ${name} must consume Observation through semantic renderer access`);
+    }
+    if (!content.includes("useWidgetProps")) {
+      violations.push(`@ggcs/widgets-react ${name} must consume semantic WidgetSpec props`);
+    }
+  }
+  const widgetsReactRegistry = read(`${widgetsReactRoot}/src/registry.ts`);
+  for (const widgetId of ["STANDARD_WIDGET_IDS.gauge", "STANDARD_WIDGET_IDS.status"]) {
+    if (!widgetsReactRegistry.includes(widgetId)) {
+      violations.push(`@ggcs/widgets-react registry is missing S4 implementation ${widgetId}`);
+    }
+  }
+  if (!widgetsReactRegistry.includes("ReactWidgetRegistry")) {
+    violations.push("@ggcs/widgets-react must integrate through the generic ReactWidgetRegistry");
+  }
+  const widgetsReactTests = read(`${widgetsReactRoot}/test/widgets.test.tsx`);
+  for (const state of ['state: "fresh"', 'state: "stale"', 'state: "unavailable"', 'state: "error"']) {
+    if (!widgetsReactTests.includes(state)) {
+      violations.push(`@ggcs/widgets-react tests must cover Observation ${state}`);
+    }
+  }
+}
+
+if (!packageJson.scripts?.["build:m05:widgets-react"] || !packageJson.scripts?.["test:m05:widgets-react"]) {
+  violations.push("M05-S4 React widget package build/test scripts are missing");
+}
+for (const requiredStep of ["build:m05:widgets-react", "test:m05:widgets-react"]) {
+  if (!verifyM05.includes(requiredStep)) violations.push(`verify:m05 does not include ${requiredStep}`);
+}
+if (!dockerfile.includes("COPY packages/widgets-react/package.json packages/widgets-react/package.json")) {
+  violations.push("Docker dependency stage must copy @ggcs/widgets-react package.json so its dependencies are installed");
+}
 if (!compose.includes('m05-verify:') || !compose.includes('profiles: ["m05"]')) violations.push("Compose is missing the M05 verification profile");
 if (!dockerfile.includes("FROM workspace AS m05-verify")) violations.push("Dockerfile is missing the M05 verification target");
 if (!dockerfile.includes("COPY packages/widgets/package.json packages/widgets/package.json")) {
@@ -284,5 +372,5 @@ if (violations.length) {
   for (const violation of violations) console.error(`M05 boundary violation: ${violation}`);
   process.exitCode = 1;
 } else {
-  console.log("M05-S1/S2/S3 legacy removal + semantic widget + React renderer boundaries: PASS");
+  console.log("M05-S1/S2/S3/S4 legacy removal + semantic widget + React renderer/widget boundaries: PASS");
 }

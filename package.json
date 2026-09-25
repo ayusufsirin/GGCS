@@ -85,12 +85,14 @@
     "build:m05:web": "CI=false react-scripts build",
     "test:m05:web": "react-scripts test --watchAll=false --runInBand",
     "check:m05-boundaries": "node scripts/check-m05-boundaries.mjs",
-    "verify:m05": "pnpm run verify:m03 && pnpm run build:m05:widgets && pnpm run test:m05:widgets && pnpm run build:m05:renderer-react && pnpm run test:m05:renderer-react && pnpm run build:m05:web && pnpm run test:m05:web && pnpm run check:m05-boundaries",
+    "verify:m05": "pnpm run verify:m03 && pnpm run build:m05:widgets && pnpm run test:m05:widgets && pnpm run build:m05:renderer-react && pnpm run test:m05:renderer-react && pnpm run build:m05:widgets-react && pnpm run test:m05:widgets-react && pnpm run build:m05:web && pnpm run test:m05:web && pnpm run check:m05-boundaries",
     "docker:m05:verify": "docker compose --profile m05 run --rm --build m05-verify",
     "build:m05:widgets": "pnpm --filter @ggcs/widgets build",
     "test:m05:widgets": "pnpm --filter @ggcs/widgets test",
     "build:m05:renderer-react": "pnpm --filter @ggcs/renderer-react build",
-    "test:m05:renderer-react": "pnpm --filter @ggcs/renderer-react test"
+    "test:m05:renderer-react": "pnpm --filter @ggcs/renderer-react test",
+    "build:m05:widgets-react": "pnpm --filter @ggcs/widgets-react build",
+    "test:m05:widgets-react": "pnpm --filter @ggcs/widgets-react test"
   },
   "eslintConfig": {
     "extends": [
