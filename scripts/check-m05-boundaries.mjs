@@ -166,6 +166,9 @@ const compose = read("compose.yaml");
 const dockerfile = read("Dockerfile");
 if (!compose.includes('m05-verify:') || !compose.includes('profiles: ["m05"]')) violations.push("Compose is missing the M05 verification profile");
 if (!dockerfile.includes("FROM workspace AS m05-verify")) violations.push("Dockerfile is missing the M05 verification target");
+if (!dockerfile.includes("COPY packages/widgets/package.json packages/widgets/package.json")) {
+  violations.push("Docker dependency stage must copy @ggcs/widgets package.json so its devDependencies are installed");
+}
 if (compose.includes("REACT_APP_GGCS_BACKEND_MODE") || read("react.prod.Dockerfile").includes("REACT_APP_GGCS_BACKEND_MODE")) {
   violations.push("Web container configuration still exposes the retired backend mode");
 }
