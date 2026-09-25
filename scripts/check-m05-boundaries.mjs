@@ -164,6 +164,105 @@ for (const requiredStep of ["build:m05:widgets", "test:m05:widgets"]) {
 
 const compose = read("compose.yaml");
 const dockerfile = read("Dockerfile");
+
+
+// M05-S3 generic React renderer/access package boundaries.
+const rendererRoot = "packages/renderer-react";
+if (!exists(rendererRoot)) {
+  violations.push("M05-S3 is missing packages/renderer-react");
+} else {
+  const rendererPackage = JSON.parse(read(`${rendererRoot}/package.json`));
+  if (rendererPackage.name !== "@ggcs/renderer-react") {
+    violations.push("M05-S3 React renderer package must be named @ggcs/renderer-react");
+  }
+
+  const allowedRendererRuntimeDeps = new Set(["@ggcs/core", "@ggcs/schema", "@ggcs/widgets"]);
+  for (const dependency of Object.keys(rendererPackage.dependencies ?? {})) {
+    if (!allowedRendererRuntimeDeps.has(dependency)) {
+      violations.push(`@ggcs/renderer-react has forbidden runtime dependency ${dependency}`);
+    }
+  }
+  if (!rendererPackage.peerDependencies?.react) {
+    violations.push("@ggcs/renderer-react must declare React as a peer dependency");
+  }
+
+  const forbiddenRendererImports = [
+    "roslib",
+    "leaflet",
+    "react-leaflet",
+    "@ggcs/transport-rosbridge",
+    "@ggcs/sensor-suite",
+    "@ggcs/arnav",
+  ];
+  const rendererSourceFiles = walk(path.join(root, rendererRoot, "src")).filter((file) => /\.(ts|tsx|js|jsx)$/.test(file));
+  const rendererImportPattern = /(?:from\s+|import\s*\()(["'])([^"']+)\1/g;
+  for (const file of rendererSourceFiles) {
+    const content = fs.readFileSync(file, "utf8");
+    for (const match of content.matchAll(rendererImportPattern)) {
+      const specifier = match[2];
+      for (const forbidden of forbiddenRendererImports) {
+        if (specifier === forbidden || specifier.startsWith(`${forbidden}/`)) {
+          violations.push(`@ggcs/renderer-react imports forbidden transport/application dependency ${specifier}: ${path.relative(root, file)}`);
+        }
+      }
+    }
+  }
+
+  const rendererContracts = read(`${rendererRoot}/src/contracts.ts`);
+  if (!rendererContracts.includes("interface PresentationAccess")) {
+    violations.push("@ggcs/renderer-react must expose narrow PresentationAccess");
+  }
+  if (!rendererContracts.includes("interface ResolvedWidgetAccess")) {
+    violations.push("@ggcs/renderer-react must expose ResolvedWidgetAccess");
+  }
+  const presentationContracts = read("packages/widgets/src/presentation.ts");
+  if (!presentationContracts.includes('kind: "tabs"') || !presentationContracts.includes('kind: "grid"') ||
+      !presentationContracts.includes('kind: "stack"') || !presentationContracts.includes('kind: "widget"')) {
+    violations.push("@ggcs/widgets must model renderer-neutral tabs/grid/stack/widget resolved layout primitives");
+  }
+  if (!presentationContracts.includes("interface ResolvedPresentation")) {
+    violations.push("@ggcs/widgets must expose renderer-neutral ResolvedPresentation");
+  }
+  if (rendererContracts.includes("readonly runtime:") || rendererContracts.includes("runtime: Runtime")) {
+    violations.push("@ggcs/renderer-react renderer contracts must not expose unrestricted Runtime");
+  }
+
+  const rendererContext = read(`${rendererRoot}/src/context.tsx`);
+  for (const hook of [
+    "useWidgetInputObservation",
+    "useWidgetCommand",
+    "useWidgetProcedure",
+    "useWidgetCapability",
+    "useInvocationState",
+  ]) {
+    if (!rendererContext.includes(hook)) {
+      violations.push(`@ggcs/renderer-react is missing semantic access hook ${hook}`);
+    }
+  }
+
+  const rendererRegistry = read(`${rendererRoot}/src/registry.tsx`);
+  if (!rendererRegistry.includes("Duplicate React widget implementation")) {
+    violations.push("@ggcs/renderer-react registry must reject duplicate semantic widget implementations");
+  }
+  if (!rendererRegistry.includes('kind: "unsupported"')) {
+    violations.push("@ggcs/renderer-react must provide explicit unsupported widget resolution");
+  }
+
+  const rendererSession = read(`${rendererRoot}/src/session.ts`);
+  if (rendererSession.includes("Runtime") && !rendererSession.includes("no Runtime")) {
+    violations.push("@ggcs/renderer-react session must not own Runtime");
+  }
+}
+
+if (!packageJson.scripts?.["build:m05:renderer-react"] || !packageJson.scripts?.["test:m05:renderer-react"]) {
+  violations.push("M05-S3 React renderer package build/test scripts are missing");
+}
+for (const requiredStep of ["build:m05:renderer-react", "test:m05:renderer-react"]) {
+  if (!verifyM05.includes(requiredStep)) violations.push(`verify:m05 does not include ${requiredStep}`);
+}
+if (!dockerfile.includes("COPY packages/renderer-react/package.json packages/renderer-react/package.json")) {
+  violations.push("Docker dependency stage must copy @ggcs/renderer-react package.json so its dependencies are installed");
+}
 if (!compose.includes('m05-verify:') || !compose.includes('profiles: ["m05"]')) violations.push("Compose is missing the M05 verification profile");
 if (!dockerfile.includes("FROM workspace AS m05-verify")) violations.push("Dockerfile is missing the M05 verification target");
 if (!dockerfile.includes("COPY packages/widgets/package.json packages/widgets/package.json")) {
@@ -177,5 +276,5 @@ if (violations.length) {
   for (const violation of violations) console.error(`M05 boundary violation: ${violation}`);
   process.exitCode = 1;
 } else {
-  console.log("M05-S1/S2 legacy removal + semantic widget boundaries: PASS");
+  console.log("M05-S1/S2/S3 legacy removal + semantic widget + React renderer boundaries: PASS");
 }

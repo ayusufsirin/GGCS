@@ -33,6 +33,7 @@ FROM workspace-base AS dependencies
 COPY package.json pnpm-workspace.yaml ./
 COPY packages/core/package.json packages/core/package.json
 COPY packages/plugin-sdk/package.json packages/plugin-sdk/package.json
+COPY packages/renderer-react/package.json packages/renderer-react/package.json
 COPY packages/ros/package.json packages/ros/package.json
 COPY packages/ros-std-msgs/package.json packages/ros-std-msgs/package.json
 COPY packages/sensor-suite/package.json packages/sensor-suite/package.json
