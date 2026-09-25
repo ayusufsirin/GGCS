@@ -47,6 +47,9 @@
       ],
       "@ggcs/sensor-suite": [
         "packages/sensor-suite/src/index.ts"
+      ],
+      "@ggcs/widgets": [
+        "packages/widgets/src/index.ts"
       ]
     },
     "lib": [

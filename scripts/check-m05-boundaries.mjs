@@ -87,6 +87,81 @@ for (const token of ["ROSLIB", "roslib", "/rosapi/", "/ArdicLabs/", "/zed/", "/b
   if (map.includes(token)) violations.push(`compatibility map contains transport/protocol detail ${token}`);
 }
 
+// M05-S2 renderer-neutral semantic widget package boundaries.
+const widgetsRoot = "packages/widgets";
+if (!exists(widgetsRoot)) {
+  violations.push("M05-S2 is missing packages/widgets");
+} else {
+  const widgetsPackage = JSON.parse(read(`${widgetsRoot}/package.json`));
+  if (widgetsPackage.name !== "@ggcs/widgets") violations.push("M05-S2 semantic widget package must be named @ggcs/widgets");
+
+  const allowedWidgetRuntimeDeps = new Set(["@ggcs/schema"]);
+  for (const dependency of Object.keys(widgetsPackage.dependencies ?? {})) {
+    if (!allowedWidgetRuntimeDeps.has(dependency)) {
+      violations.push(`@ggcs/widgets has forbidden runtime dependency ${dependency}`);
+    }
+  }
+
+  const forbiddenWidgetImports = [
+    "react",
+    "react-dom",
+    "leaflet",
+    "react-leaflet",
+    "roslib",
+    "ink",
+    "@ggcs/core",
+    "@ggcs/transport-rosbridge",
+    "@ggcs/sensor-suite",
+    "@ggcs/arnav",
+  ];
+  const widgetSourceFiles = walk(path.join(root, widgetsRoot, "src")).filter((file) => /\.(ts|tsx|js|jsx)$/.test(file));
+  const importPattern = /(?:from\s+|import\s*\()(["'])([^"']+)\1/g;
+  for (const file of widgetSourceFiles) {
+    const content = fs.readFileSync(file, "utf8");
+    for (const match of content.matchAll(importPattern)) {
+      const specifier = match[2];
+      for (const forbidden of forbiddenWidgetImports) {
+        if (specifier === forbidden || specifier.startsWith(`${forbidden}/`)) {
+          violations.push(`@ggcs/widgets imports forbidden implementation/application dependency ${specifier}: ${path.relative(root, file)}`);
+        }
+      }
+    }
+  }
+
+  const widgetSpecs = read(`${widgetsRoot}/src/specs.ts`);
+  for (const widgetId of [
+    "ggcs:gauge",
+    "ggcs:status",
+    "ggcs:attitude",
+    "ggcs:navigation-map",
+    "ggcs:procedure-action",
+    "ggcs:image",
+    "ggcs:parameter-browser",
+    "ggcs:actuator",
+  ]) {
+    if (!read(`${widgetsRoot}/src/contracts.ts`).includes(widgetId)) {
+      violations.push(`@ggcs/widgets is missing standard semantic widget ID ${widgetId}`);
+    }
+  }
+  if (!widgetSpecs.includes("WIDGET_CAPABILITY_IDS.parameterProvider")) {
+    violations.push("parameter browser must consume a renderer-neutral ParameterProvider capability");
+  }
+  if (widgetSpecs.includes("needleColor") || widgetSpecs.includes("onColor") || widgetSpecs.includes("offColor")) {
+    violations.push("@ggcs/widgets semantic specs contain renderer-specific color/needle properties");
+  }
+  if (!read(`${widgetsRoot}/src/value-models.ts`).includes("ImageFrame")) {
+    violations.push("@ggcs/widgets must define renderer-neutral ImageFrame semantics");
+  }
+}
+
+if (!packageJson.scripts?.["build:m05:widgets"] || !packageJson.scripts?.["test:m05:widgets"]) {
+  violations.push("M05-S2 widget package build/test scripts are missing");
+}
+const verifyM05 = packageJson.scripts?.["verify:m05"] ?? "";
+for (const requiredStep of ["build:m05:widgets", "test:m05:widgets"]) {
+  if (!verifyM05.includes(requiredStep)) violations.push(`verify:m05 does not include ${requiredStep}`);
+}
+
 const compose = read("compose.yaml");
 const dockerfile = read("Dockerfile");
 if (!compose.includes('m05-verify:') || !compose.includes('profiles: ["m05"]')) violations.push("Compose is missing the M05 verification profile");
@@ -99,5 +174,5 @@ if (violations.length) {
   for (const violation of violations) console.error(`M05 boundary violation: ${violation}`);
   process.exitCode = 1;
 } else {
-  console.log("M05-S1 legacy middleware removal boundaries: PASS");
+  console.log("M05-S1/S2 legacy removal + semantic widget boundaries: PASS");
 }
