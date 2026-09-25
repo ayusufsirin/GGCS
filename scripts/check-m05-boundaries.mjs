@@ -165,6 +165,14 @@ for (const requiredStep of ["build:m05:widgets", "test:m05:widgets"]) {
 const compose = read("compose.yaml");
 const dockerfile = read("Dockerfile");
 
+// CRA/Jest requires one exact React/React-DOM runtime pair. Without a pnpm lockfile,
+// compatible semver ranges can drift independently during Docker dependency install.
+const reactVersion = packageJson.dependencies?.react;
+const reactDomVersion = packageJson.dependencies?.["react-dom"];
+const exactSemver = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
+if (!reactVersion || reactVersion !== reactDomVersion || !exactSemver.test(reactVersion)) {
+  violations.push("Root react and react-dom must use the same exact version for deterministic Web/Jest installs");
+}
 
 // M05-S3 generic React renderer/access package boundaries.
 const rendererRoot = "packages/renderer-react";
