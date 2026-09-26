@@ -368,9 +368,44 @@ if (compose.includes("REACT_APP_GGCS_BACKEND_MODE") || read("react.prod.Dockerfi
   violations.push("Web container configuration still exposes the retired backend mode");
 }
 
+// M05-S5 first real Sensor Suite semantic React cutover (Gauge + Status only).
+const semanticCutover = read("src/presentation/semantic-widget-cutover.ts");
+const semanticFrame = read("src/presentation/SemanticWidgetFrame.tsx");
+const bootstrapSource = read("src/bootstrap.tsx");
+for (const dependency of ["@ggcs/renderer-react", "@ggcs/widgets", "@ggcs/widgets-react"]) {
+  if (packageJson.dependencies?.[dependency] !== "workspace:*") {
+    violations.push(`M05-S5 Web app must consume ${dependency} as a workspace dependency`);
+  }
+}
+if (!semanticCutover.includes("createSensorSuiteSemanticPresentationAccess")) {
+  violations.push("M05-S5 must adapt selected production widgets through narrow PresentationAccess");
+}
+if (!semanticCutover.includes("gaugeWidgetSpec") || !semanticCutover.includes("statusWidgetSpec")) {
+  violations.push("M05-S5 semantic cutover must use the standard Gauge/Status WidgetSpecs");
+}
+for (const forbidden of ["/ArdicLabs/", "/zed/", "/bag_recorder/", "ROSLIB", "roslib", "needleColor", "onColor", "offColor", "lucide-react"]) {
+  if (semanticCutover.includes(forbidden)) {
+    violations.push(`M05-S5 semantic cutover contains forbidden protocol/renderer detail ${forbidden}`);
+  }
+}
+if (!semanticFrame.includes("ReactResolvedWidget") || !semanticFrame.includes("createStandardReactWidgetRegistry")) {
+  violations.push("M05-S5 semantic frame must render through the generic React renderer and widgets-react registry");
+}
+if (!bootstrapSource.includes("resolveSensorSuiteSemanticWidget") || !bootstrapSource.includes("SemanticWidgetFrame")) {
+  violations.push("M05-S5 Dashboard must route selected production widgets through the semantic React path");
+}
+if (!read("packages/renderer-react/src/presentation.tsx").includes("export function ReactResolvedWidget")) {
+  violations.push("M05-S5 generic renderer must expose the single resolved-widget primitive used by hybrid strangler integration");
+}
+for (const legacyWidget of ["MapWidget", "HUDWidget", "ROSParametersWidget", "ServiceWidget", "ImageWidget"]) {
+  if (!read("src/widgets/widgets.tsx").includes(legacyWidget)) {
+    violations.push(`M05-S5 must preserve non-migrated legacy widget ${legacyWidget} during incremental cutover`);
+  }
+}
+
 if (violations.length) {
   for (const violation of violations) console.error(`M05 boundary violation: ${violation}`);
   process.exitCode = 1;
 } else {
-  console.log("M05-S1/S2/S3/S4 legacy removal + semantic widget + React renderer/widget boundaries: PASS");
+  console.log("M05-S1/S2/S3/S4/S5 legacy removal + semantic widget + React renderer/widget + app cutover boundaries: PASS");
 }

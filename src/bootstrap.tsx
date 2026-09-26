@@ -5,6 +5,8 @@ import { config } from "./config";
 import { WIDGETS } from "./widgets/widgets";
 import { FallbackWidget } from "./widgets/FallbackWidget";
 import { Entity, Grids, Tab } from "./interfaces";
+import { SemanticWidgetFrame } from "./presentation/SemanticWidgetFrame";
+import { resolveSensorSuiteSemanticWidget } from "./presentation/semantic-widget-cutover";
 
 // ---------- Shared helpers ----------
 const joinPath = (path: string[]) => path.join(".");
@@ -12,6 +14,11 @@ const joinPath = (path: string[]) => path.join(".");
 
 // ---------- Widget frame (ROS-agnostic widgets) ----------
 function WidgetFrame({ instanceId, name, props }: { instanceId: string; name: string; props?: Record<string, any> }) {
+  const semanticInstance = resolveSensorSuiteSemanticWidget(instanceId, name);
+  if (semanticInstance) {
+    return <SemanticWidgetFrame instance={semanticInstance} />;
+  }
+
   const Comp = WIDGETS[name] ?? FallbackWidget;
   return (
     <WidgetAttrProvider instanceId={instanceId}>

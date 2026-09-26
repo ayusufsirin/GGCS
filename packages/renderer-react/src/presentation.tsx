@@ -6,8 +6,28 @@ import type {
   ResolvedWidgetNode,
 } from "@ggcs/widgets";
 import type { ReactRendererSession } from "./session.js";
+import type { ResolvedWidgetAccess } from "./contracts.js";
 import { accessForWidget, ReactRendererProvider, ResolvedWidgetProvider } from "./context.js";
 import { ReactWidgetRegistry } from "./registry.js";
+
+export function ReactResolvedWidget(props: {
+  readonly instance: ResolvedWidgetNode["widget"];
+  readonly access: ResolvedWidgetAccess;
+  readonly registry: ReactWidgetRegistry;
+}) {
+  const resolution = props.registry.resolve(props.instance);
+  const Component = resolution.component;
+  return (
+    <div
+      data-ggcs-widget-type={props.instance.spec.type}
+      data-ggcs-resolution={resolution.kind}
+    >
+      <ResolvedWidgetProvider instance={props.instance} access={props.access}>
+        <Component />
+      </ResolvedWidgetProvider>
+    </div>
+  );
+}
 
 function WidgetNodeView(props: {
   readonly node: ResolvedWidgetNode;
@@ -15,18 +35,12 @@ function WidgetNodeView(props: {
   readonly registry: ReactWidgetRegistry;
 }) {
   const access = accessForWidget(props.session.access, props.node.widget);
-  const resolution = props.registry.resolve(props.node.widget);
-  const Component = resolution.component;
   return (
     <div
       data-ggcs-node-kind="widget"
       data-ggcs-node-id={props.node.id}
-      data-ggcs-widget-type={props.node.widget.spec.type}
-      data-ggcs-resolution={resolution.kind}
     >
-      <ResolvedWidgetProvider instance={props.node.widget} access={access}>
-        <Component />
-      </ResolvedWidgetProvider>
+      <ReactResolvedWidget instance={props.node.widget} access={access} registry={props.registry} />
     </div>
   );
 }
