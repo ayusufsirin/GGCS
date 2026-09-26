@@ -1,4 +1,5 @@
 import { Entity, Topic, Widget } from "./interfaces";
+import { SENSOR_SUITE_RECORDING_REQUESTS } from "./application/recording-actions";
 
 import {
   Bubbles,
@@ -164,12 +165,6 @@ const accelGaugeWidget: Widget = {
     }
   }
 };
-
-function timestamp(): string {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}_${pad(d.getMonth() + 1)}_${pad(d.getDate())}-${pad(d.getHours())}_${pad(d.getMinutes())}_${pad(d.getSeconds())}`;
-}
 
 export const config: Entity = {
   tabs: {
@@ -484,10 +479,7 @@ export const config: Entity = {
                             props: {
                               buttonLabel: "Start SVO",
                               buttonPendingLabel: "Starting",
-                              requestParams: {
-                                target_framerate: 10,
-                                svo_filename: `/home/neurolab/SensorSystemROS2/ros_ws_host/zed_${timestamp()}.svo2`
-                              }
+                              requestParams: SENSOR_SUITE_RECORDING_REQUESTS.zedStart
                             },
                             config: {
                               callService: {
@@ -511,7 +503,7 @@ export const config: Entity = {
                             props: {
                               buttonLabel: "Stop SVO",
                               buttonPendingLabel: "Stopping",
-                              requestParams: {}
+                              requestParams: SENSOR_SUITE_RECORDING_REQUESTS.zedStop
                             },
                             config: {
                               callService: {
@@ -535,7 +527,7 @@ export const config: Entity = {
                             props: {
                               buttonLabel: "Start ROS Bag",
                               buttonPendingLabel: "Starting",
-                              requestParams: {}
+                              requestParams: SENSOR_SUITE_RECORDING_REQUESTS.bagStart
                             },
                             config: {
                               callService: {
@@ -559,7 +551,7 @@ export const config: Entity = {
                             props: {
                               buttonLabel: "Stop ROS Bag",
                               buttonPendingLabel: "Stopping",
-                              requestParams: {}
+                              requestParams: SENSOR_SUITE_RECORDING_REQUESTS.bagStop
                             },
                             config: {
                               callService: {

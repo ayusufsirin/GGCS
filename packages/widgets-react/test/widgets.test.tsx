@@ -3,7 +3,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
 import {
   RuntimeError,
+  type Invocation,
   type Observation,
+  type Procedure,
   type Source,
   type Subscription,
 } from "@ggcs/core";
@@ -14,14 +16,21 @@ import {
 import {
   STANDARD_WIDGET_IDS,
   gaugeWidgetSpec,
+  imageWidgetSpec,
+  procedureActionWidgetSpec,
   statusWidgetSpec,
+  type ImageFrame,
   type ResolvedWidgetInstance,
   type StatusValue,
+  type WidgetSpec,
 } from "@ggcs/widgets";
 import {
   GaugeWidget,
+  ImageWidget,
+  ProcedureActionWidget,
   StatusWidget,
   createStandardReactWidgetRegistry,
+  imageFrameSource,
 } from "../src/index.js";
 
 function sourceOf<T>(observation: Observation<T>): Source<T> {
@@ -35,15 +44,16 @@ function sourceOf<T>(observation: Observation<T>): Source<T> {
 
 function markup<T>(options: {
   readonly component: React.ComponentType;
-  readonly spec: typeof gaugeWidgetSpec | typeof statusWidgetSpec;
+  readonly spec: WidgetSpec;
   readonly props: Readonly<Record<string, unknown>>;
-  readonly observation: Observation<T>;
+  readonly observation?: Observation<T>;
+  readonly procedure?: Procedure<void, unknown>;
 }): string {
-  const source = sourceOf(options.observation);
+  const source = options.observation ? sourceOf(options.observation) : undefined;
   const access: ResolvedWidgetAccess = {
-    input: <V,>() => source as unknown as Source<V>,
+    input: <V,>() => source as unknown as Source<V> | undefined,
     command: () => undefined,
-    procedure: () => undefined,
+    procedure: <I, O>() => options.procedure as unknown as Procedure<I, O> | undefined,
     capability: () => undefined,
   };
   const instance: ResolvedWidgetInstance = {
@@ -172,8 +182,58 @@ describe("semantic React widgets", () => {
     expect(failed).toContain("Error");
   });
 
-  test("registry publishes only the S4-proven gauge/status implementations", () => {
+  test("procedure action renders a protocol-agnostic idle button bound to a semantic Procedure", () => {
+    const invocation: Invocation<unknown> = {
+      id: "test.invocation",
+      current: () => ({ state: "pending", startedAt: 1 }),
+      subscribe: () => ({ unsubscribe() {} }) as Subscription,
+      result: async () => ({}),
+    };
+    const procedure: Procedure<void, unknown> = {
+      kind: "procedure",
+      id: "test.procedure" as never,
+      invoke: () => invocation,
+    };
+    const html = markup({
+      component: ProcedureActionWidget,
+      spec: procedureActionWidgetSpec,
+      props: { label: "Start Recording", pendingLabel: "Starting" },
+      procedure,
+    });
+    expect(html).toContain('data-ggcs-widget="procedure-action"');
+    expect(html).toContain('data-invocation-state="idle"');
+    expect(html).toContain("Start Recording");
+    expect(html).not.toContain("callService");
+  });
+
+  test("image renders renderer-neutral base64 ImageFrame values", () => {
+    const frame: ImageFrame = {
+      payload: "YWJj",
+      mimeType: "image/png",
+      encoding: "base64",
+      provenance: "camera.zed.rgb.data",
+    };
+    const html = markup<ImageFrame>({
+      component: ImageWidget,
+      spec: imageWidgetSpec,
+      props: { label: "Camera" },
+      observation: { state: "fresh", value: frame, updatedAt: 1 },
+    });
+    expect(html).toContain('data-ggcs-widget="image"');
+    expect(html).toContain('data-observation-state="fresh"');
+    expect(html).toContain('src="data:image/png;base64,YWJj"');
+    expect(imageFrameSource({ ...frame, encoding: "uri", payload: "https://example.invalid/frame" }))
+      .toBe("https://example.invalid/frame");
+    expect(imageFrameSource({ ...frame, encoding: "opaque-reference" })).toBeUndefined();
+  });
+
+  test("registry publishes the S4/S6 proven semantic implementations", () => {
     const registry = createStandardReactWidgetRegistry();
-    expect(registry.widgetTypes).toEqual([STANDARD_WIDGET_IDS.gauge, STANDARD_WIDGET_IDS.status]);
+    expect(registry.widgetTypes).toEqual([
+      STANDARD_WIDGET_IDS.gauge,
+      STANDARD_WIDGET_IDS.status,
+      STANDARD_WIDGET_IDS.procedureAction,
+      STANDARD_WIDGET_IDS.image,
+    ]);
   });
 });

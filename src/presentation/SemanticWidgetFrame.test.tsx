@@ -1,6 +1,13 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
-import type { RuntimeResource, Source } from "@ggcs/core";
+import { fireEvent, render, screen } from "@testing-library/react";
+import type {
+  Invocation,
+  Procedure,
+  RuntimeResource,
+  Source,
+  Subscription,
+} from "@ggcs/core";
+import { SENSOR_SUITE_RECORDING_REQUESTS } from "../application/recording-actions";
 import { RuntimeCompatibilityProvider } from "../runtime/compatibility-context";
 import type { SensorSuiteCompatibilityAccess } from "../runtime/sensor-suite-application";
 import { SemanticWidgetFrame } from "./SemanticWidgetFrame";
@@ -13,26 +20,38 @@ const speedSource: Source<number> = {
   subscribe: () => ({ closed: false, unsubscribe() {} }),
 };
 
-const compatibility: SensorSuiteCompatibilityAccess = {
-  runtimeState: () => "running",
-  resolvePort: (_instanceId, portName) => portName === "value"
-    ? { kind: "source", resourceId: "vehicle.speed" }
-    : undefined,
-  resolveCapability: () => undefined,
-  resourceForPort: <T extends RuntimeResource>(_instanceId: string, portName: string) =>
-    portName === "value" ? speedSource as unknown as T : undefined,
-  resourceForCapability: () => undefined,
-};
+function compatibilityFor(options: {
+  readonly instanceId: string;
+  readonly legacyPort: string;
+  readonly binding: { readonly kind: "source" | "procedure"; readonly resourceId: string };
+  readonly resource: RuntimeResource;
+}): SensorSuiteCompatibilityAccess {
+  return {
+    runtimeState: () => "running",
+    resolvePort: (instanceId, portName) => instanceId === options.instanceId && portName === options.legacyPort
+      ? options.binding
+      : undefined,
+    resolveCapability: () => undefined,
+    resourceForPort: <T extends RuntimeResource>(instanceId: string, portName: string) =>
+      instanceId === options.instanceId && portName === options.legacyPort
+        ? options.resource as T
+        : undefined,
+    resourceForCapability: () => undefined,
+  };
+}
 
 test("renders a migrated production gauge through the semantic React registry/access path", () => {
-  const instance = resolveSensorSuiteSemanticWidget(
-    "tabs.items.home.grids.items.panel.tabs.items.gauges.grids.items.speed",
-    "gauge",
-  );
+  const instanceId = "tabs.items.home.grids.items.panel.tabs.items.gauges.grids.items.speed";
+  const instance = resolveSensorSuiteSemanticWidget(instanceId, "gauge");
   expect(instance).toBeDefined();
 
   render(
-    <RuntimeCompatibilityProvider access={compatibility}>
+    <RuntimeCompatibilityProvider access={compatibilityFor({
+      instanceId,
+      legacyPort: "value",
+      binding: { kind: "source", resourceId: "vehicle.speed" },
+      resource: speedSource,
+    })}>
       <SemanticWidgetFrame instance={instance!} />
     </RuntimeCompatibilityProvider>,
   );
@@ -40,4 +59,71 @@ test("renders a migrated production gauge through the semantic React registry/ac
   expect(screen.getByRole("meter")).toHaveAttribute("aria-valuenow", "4.25");
   expect(screen.getByText("4.25 m/s")).toBeInTheDocument();
   expect(document.querySelector('[data-ggcs-resolution="exact"]')).not.toBeNull();
+});
+
+test("invokes a migrated recording action through a bound semantic Procedure", () => {
+  let invokedWith: unknown;
+  const invocation: Invocation<unknown> = {
+    id: "test.invocation",
+    current: () => ({ state: "pending", startedAt: 1 }),
+    subscribe(listener) {
+      listener(this.current());
+      return { closed: false, unsubscribe() {} } as Subscription;
+    },
+    result: async () => ({}),
+  };
+  const procedure: Procedure<unknown, unknown> = {
+    kind: "procedure",
+    id: "zed.recording.start",
+    invoke(input) {
+      invokedWith = input;
+      return invocation;
+    },
+  };
+  const instanceId = "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.zedStartSvo";
+  const instance = resolveSensorSuiteSemanticWidget(instanceId, "service");
+  expect(instance).toBeDefined();
+
+  render(
+    <RuntimeCompatibilityProvider access={compatibilityFor({
+      instanceId,
+      legacyPort: "callService",
+      binding: { kind: "procedure", resourceId: "zed.recording.start" },
+      resource: procedure,
+    })}>
+      <SemanticWidgetFrame instance={instance!} />
+    </RuntimeCompatibilityProvider>,
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "Start SVO" }));
+  expect(invokedWith).toEqual(SENSOR_SUITE_RECORDING_REQUESTS.zedStart);
+  expect(screen.getByRole("button", { name: "Starting" })).toBeDisabled();
+});
+
+test("renders the migrated camera through renderer-neutral ImageFrame adaptation", () => {
+  const camera: Source<string> = {
+    kind: "source",
+    id: "camera.zed.rgb.data",
+    current: () => ({ state: "fresh", value: "YWJj", updatedAt: 1 }),
+    subscribe: () => ({ closed: false, unsubscribe() {} }),
+  };
+  const instanceId = "tabs.items.images.grids.items.zedRgb";
+  const instance = resolveSensorSuiteSemanticWidget(instanceId, "image");
+  expect(instance).toBeDefined();
+
+  render(
+    <RuntimeCompatibilityProvider access={compatibilityFor({
+      instanceId,
+      legacyPort: "image",
+      binding: { kind: "source", resourceId: "camera.zed.rgb.data" },
+      resource: camera,
+    })}>
+      <SemanticWidgetFrame instance={instance!} />
+    </RuntimeCompatibilityProvider>,
+  );
+
+  expect(screen.getByRole("img", { name: "ZED RGB Image" }))
+    .toHaveAttribute("src", "data:image/png;base64,YWJj");
+  expect(document.querySelector('[data-ggcs-widget="image"]'))
+    .toHaveAttribute("data-observation-state", "fresh");
 });

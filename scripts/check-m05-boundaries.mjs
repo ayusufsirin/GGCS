@@ -416,9 +416,57 @@ for (const legacyWidget of ["MapWidget", "HUDWidget", "ROSParametersWidget", "Se
   }
 }
 
+// M05-S6 ProcedureAction + Image semantic React extraction/cutover.
+const procedureActionReact = read(`${widgetsReactRoot}/src/ProcedureActionWidget.tsx`);
+const imageReact = read(`${widgetsReactRoot}/src/ImageWidget.tsx`);
+if (!procedureActionReact.includes("useWidgetProcedure") || !procedureActionReact.includes("useInvocationState")) {
+  violations.push("M05-S6 ProcedureAction must derive invocation/pending/error state from semantic Procedure access");
+}
+for (const token of ["callService", "requestParams", "/zed/", "/bag_recorder/", "ROSLIB", "roslib"]) {
+  if (procedureActionReact.includes(token)) {
+    violations.push(`M05-S6 reusable ProcedureAction contains protocol/migration detail ${token}`);
+  }
+}
+if (!imageReact.includes("useWidgetInputObservation") || !imageReact.includes("ImageFrame")) {
+  violations.push("M05-S6 Image widget must consume renderer-neutral ImageFrame Observation semantics");
+}
+if (imageReact.includes("data:image/png;base64,${image}") || imageReact.includes("useAttr")) {
+  violations.push("M05-S6 reusable Image widget must not retain the legacy fixed PNG/useAttr path");
+}
+const widgetsReactRegistryS6 = read(`${widgetsReactRoot}/src/registry.ts`);
+for (const widgetId of ["STANDARD_WIDGET_IDS.procedureAction", "STANDARD_WIDGET_IDS.image"]) {
+  if (!widgetsReactRegistryS6.includes(widgetId)) {
+    violations.push(`@ggcs/widgets-react registry is missing S6 implementation ${widgetId}`);
+  }
+}
+if (!semanticCutover.includes("procedureActionWidgetSpec") || !semanticCutover.includes("imageWidgetSpec")) {
+  violations.push("M05-S6 semantic cutover must use the standard ProcedureAction and Image WidgetSpecs");
+}
+if (!semanticCutover.includes("procedureBindings") || !semanticCutover.includes('kind: "base64-image-frame"')) {
+  violations.push("M05-S6 app adapter must bind fixed Procedure input and adapt camera payload into ImageFrame before rendering");
+}
+for (const forbidden of ["requestParams", "/zed/", "/bag_recorder/", "sensor_msgs/msg/CompressedImage", "std_srvs/srv/Trigger", "zed_msgs/srv/StartSvoRec"]) {
+  if (semanticCutover.includes(forbidden)) {
+    violations.push(`M05-S6 semantic cutover contains forbidden protocol/UI request detail ${forbidden}`);
+  }
+}
+const recordingActions = read("src/application/recording-actions.ts");
+if (!recordingActions.includes("SENSOR_SUITE_RECORDING_REQUESTS") || !recordingActions.includes("module-load timestamp")) {
+  violations.push("M05-S6 must make recording request construction application-owned while documenting preserved timestamp behavior");
+}
+if (!read("src/config.ts").includes("SENSOR_SUITE_RECORDING_REQUESTS.zedStart")) {
+  violations.push("M05-S6 legacy config fallback must consume the same application-owned recording request data");
+}
+const semanticCutoverTests = read("src/presentation/semantic-widget-cutover.test.ts");
+for (const evidence of ["ggcs:procedure-action", "ggcs:image", "SENSOR_SUITE_RECORDING_REQUESTS.zedStart", "renderer-neutral ImageFrame"]) {
+  if (!semanticCutoverTests.includes(evidence)) {
+    violations.push(`M05-S6 cutover tests are missing evidence ${evidence}`);
+  }
+}
+
 if (violations.length) {
   for (const violation of violations) console.error(`M05 boundary violation: ${violation}`);
   process.exitCode = 1;
 } else {
-  console.log("M05-S1/S2/S3/S4/S5 legacy removal + semantic widget + React renderer/widget + app cutover boundaries: PASS");
+  console.log("M05-S1/S2/S3/S4/S5/S6 legacy removal + semantic widget + React renderer/widget + app cutover boundaries: PASS");
 }

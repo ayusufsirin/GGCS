@@ -1,21 +1,42 @@
-import type { RuntimeResource, Source } from "@ggcs/core";
+import type {
+  LastGoodObservation,
+  Observation,
+  Procedure,
+  RuntimeResource,
+  Source,
+} from "@ggcs/core";
 import type {
   PresentationAccess,
   ResolvedWidgetAccess,
 } from "@ggcs/renderer-react";
 import {
   gaugeWidgetSpec,
+  imageWidgetSpec,
+  procedureActionWidgetSpec,
   statusWidgetSpec,
+  type ImageFrame,
   type ResolvedWidgetInstance,
 } from "@ggcs/widgets";
+import { SENSOR_SUITE_RECORDING_REQUESTS } from "../application/recording-actions";
 import type { SensorSuiteCompatibilityAccess } from "../runtime/sensor-suite-application";
 
-type SemanticLegacyWidgetName = "gauge" | "status";
+type SemanticLegacyWidgetName = "gauge" | "status" | "service" | "image";
+
+type InputTransform = Readonly<{
+  kind: "base64-image-frame";
+  mimeType: string;
+  provenance?: string;
+}>;
 
 interface SemanticWidgetCutoverDefinition {
   readonly legacyWidgetName: SemanticLegacyWidgetName;
   readonly instance: ResolvedWidgetInstance;
-  readonly inputAliases: Readonly<Record<string, string>>;
+  readonly inputAliases?: Readonly<Record<string, string>>;
+  readonly inputTransforms?: Readonly<Record<string, InputTransform>>;
+  readonly procedureBindings?: Readonly<Record<string, Readonly<{
+    legacyPort: string;
+    input: unknown;
+  }>>>;
 }
 
 function booleanStatus(
@@ -42,6 +63,25 @@ function booleanStatus(
       },
     },
     inputAliases: { value: "status" },
+  };
+}
+
+function procedureAction(
+  instanceId: string,
+  label: string,
+  pendingLabel: string,
+  input: unknown,
+): SemanticWidgetCutoverDefinition {
+  return {
+    legacyWidgetName: "service",
+    instance: {
+      id: instanceId,
+      spec: procedureActionWidgetSpec,
+      props: { label, pendingLabel },
+    },
+    procedureBindings: {
+      trigger: { legacyPort: "callService", input },
+    },
   };
 }
 
@@ -145,6 +185,46 @@ const DEFINITIONS: readonly SemanticWidgetCutoverDefinition[] = [
     },
     inputAliases: { value: "value" },
   },
+  procedureAction(
+    "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.zedStartSvo",
+    "Start SVO",
+    "Starting",
+    SENSOR_SUITE_RECORDING_REQUESTS.zedStart,
+  ),
+  procedureAction(
+    "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.zedStopSvo",
+    "Stop SVO",
+    "Stopping",
+    SENSOR_SUITE_RECORDING_REQUESTS.zedStop,
+  ),
+  procedureAction(
+    "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.bagStartRecord",
+    "Start ROS Bag",
+    "Starting",
+    SENSOR_SUITE_RECORDING_REQUESTS.bagStart,
+  ),
+  procedureAction(
+    "tabs.items.home.grids.items.panel.tabs.items.actions.grids.items.bagStopRecord",
+    "Stop ROS Bag",
+    "Stopping",
+    SENSOR_SUITE_RECORDING_REQUESTS.bagStop,
+  ),
+  {
+    legacyWidgetName: "image",
+    instance: {
+      id: "tabs.items.images.grids.items.zedRgb",
+      spec: imageWidgetSpec,
+      props: { label: "ZED RGB Image" },
+    },
+    inputAliases: { frame: "image" },
+    inputTransforms: {
+      frame: {
+        kind: "base64-image-frame",
+        mimeType: "image/png",
+        provenance: "camera.zed.rgb.data",
+      },
+    },
+  },
 ];
 
 const DEFINITION_BY_ID = new Map(
@@ -175,6 +255,88 @@ function sourceResource<T, Q>(
   return resource?.kind === "source" ? resource as Source<T, Q> : undefined;
 }
 
+function procedureResource<I, O>(
+  compatibility: SensorSuiteCompatibilityAccess,
+  instanceId: string,
+  legacyPort: string,
+): Procedure<I, O> | undefined {
+  const binding = compatibility.resolvePort(instanceId, legacyPort);
+  if (binding?.kind !== "procedure") return undefined;
+  const resource = compatibility.resourceForPort<RuntimeResource>(instanceId, legacyPort);
+  return resource?.kind === "procedure" ? resource as Procedure<I, O> : undefined;
+}
+
+function mapLastGood<T, U, Q>(
+  observation: LastGoodObservation<T, Q>,
+  project: (value: T) => U,
+): LastGoodObservation<U, Q> {
+  if (observation.state === "fresh") {
+    return { ...observation, value: project(observation.value) };
+  }
+  return { ...observation, value: project(observation.value) };
+}
+
+function mapObservation<T, U, Q>(
+  observation: Observation<T, Q>,
+  project: (value: T) => U,
+): Observation<U, Q> {
+  switch (observation.state) {
+    case "fresh":
+      return { ...observation, value: project(observation.value) };
+    case "stale":
+      return { ...observation, value: project(observation.value) };
+    case "error": {
+      if (!observation.lastGood) {
+        return {
+          state: "error",
+          error: observation.error,
+          occurredAt: observation.occurredAt,
+        };
+      }
+      const lastGood = mapLastGood(observation.lastGood, project);
+      return {
+        state: "error",
+        error: observation.error,
+        occurredAt: observation.occurredAt,
+        lastGood,
+      };
+    }
+    case "unavailable":
+      return observation;
+  }
+}
+
+function projectSource<T, U, Q>(
+  source: Source<T, Q>,
+  project: (value: T) => U,
+): Source<U, Q> {
+  return {
+    kind: "source",
+    id: source.id,
+    current: () => mapObservation(source.current(), project),
+    subscribe(listener) {
+      return source.subscribe((observation) => listener(mapObservation(observation, project)));
+    },
+  };
+}
+
+function imageFrameProjector(transform: InputTransform): (payload: string) => ImageFrame {
+  return (payload) => ({
+    payload,
+    mimeType: transform.mimeType,
+    encoding: "base64",
+    ...(transform.provenance ? { provenance: transform.provenance } : {}),
+  });
+}
+
+function bindProcedureInput<I, O>(procedure: Procedure<I, O>, input: I): Procedure<void, O> {
+  return {
+    kind: "procedure",
+    id: procedure.id,
+    invoke: () => procedure.invoke(input),
+  };
+}
+
 /**
  * Temporary app-local bridge from the already-proven Runtime compatibility map
  * into the narrow semantic PresentationAccess required by @ggcs/renderer-react.
@@ -183,22 +345,61 @@ function sourceResource<T, Q>(
 export function createSensorSuiteSemanticPresentationAccess(
   compatibility: SensorSuiteCompatibilityAccess,
 ): PresentationAccess {
+  const cache = new Map<string, ResolvedWidgetAccess | undefined>();
+
   return {
     widget(instanceId) {
+      if (cache.has(instanceId)) return cache.get(instanceId);
       const definition = DEFINITION_BY_ID.get(instanceId);
-      if (!definition) return undefined;
+      if (!definition) {
+        cache.set(instanceId, undefined);
+        return undefined;
+      }
 
+      const inputCache = new Map<string, Source<unknown, unknown> | undefined>();
+      const procedureCache = new Map<string, Procedure<void, unknown> | undefined>();
       const access: ResolvedWidgetAccess = {
         input<T, Q>(port: string) {
-          const legacyPort = definition.inputAliases[port];
-          return legacyPort
-            ? sourceResource<T, Q>(compatibility, definition.instance.id, legacyPort)
-            : undefined;
+          if (inputCache.has(port)) {
+            return inputCache.get(port) as Source<T, Q> | undefined;
+          }
+          const legacyPort = definition.inputAliases?.[port];
+          if (!legacyPort) return undefined;
+          const source = sourceResource<unknown, unknown>(compatibility, definition.instance.id, legacyPort);
+          if (!source) {
+            inputCache.set(port, undefined);
+            return undefined;
+          }
+          const transform = definition.inputTransforms?.[port];
+          const resolved = transform?.kind === "base64-image-frame"
+            ? projectSource(source as Source<string, unknown>, imageFrameProjector(transform))
+            : source;
+          inputCache.set(port, resolved as Source<unknown, unknown>);
+          return resolved as Source<T, Q>;
         },
         command: () => undefined,
-        procedure: () => undefined,
+        procedure<I, O>(port: string) {
+          if (procedureCache.has(port)) {
+            return procedureCache.get(port) as Procedure<I, O> | undefined;
+          }
+          const binding = definition.procedureBindings?.[port];
+          if (!binding) return undefined;
+          const procedure = procedureResource<unknown, unknown>(
+            compatibility,
+            definition.instance.id,
+            binding.legacyPort,
+          );
+          if (!procedure) {
+            procedureCache.set(port, undefined);
+            return undefined;
+          }
+          const resolved = bindProcedureInput(procedure, binding.input);
+          procedureCache.set(port, resolved);
+          return resolved as unknown as Procedure<I, O>;
+        },
         capability: () => undefined,
       };
+      cache.set(instanceId, access);
       return access;
     },
   };

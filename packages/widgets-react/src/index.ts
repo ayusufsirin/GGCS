@@ -1,3 +1,5 @@
+export * from "./ImageWidget.js";
+export * from "./ProcedureActionWidget.js";
 export * from "./GaugeWidget.js";
 export * from "./StatusWidget.js";
 export * from "./observation.js";
