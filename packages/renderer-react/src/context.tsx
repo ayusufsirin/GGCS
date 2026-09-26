@@ -20,6 +20,7 @@ import type {
 } from "./contracts.js";
 import type { ResolvedWidgetInstance } from "@ggcs/widgets";
 import type { ReactRendererSession } from "./session.js";
+import { createCachedExternalStore } from "./external-store.js";
 
 const RendererSessionContext = createContext<ReactRendererSession | null>(null);
 const WidgetContext = createContext<{
@@ -81,15 +82,23 @@ export function useResolvedWidgetAccess(): ResolvedWidgetAccess {
 export function useWidgetInputObservation<T, Q = unknown>(port: string): Observation<T, Q> | undefined {
   const access = useResolvedWidgetAccess();
   const source = access.input<T, Q>(port);
-  const subscribe = useCallback(
-    (notify: () => void) => {
-      if (!source) return () => undefined;
-      const subscription = source.subscribe(() => notify());
-      return () => subscription.unsubscribe();
-    },
+  const store = useMemo(
+    () => source
+      ? createCachedExternalStore<Observation<T, Q>>({
+          current: () => source.current(),
+          subscribe: (listener) => {
+            const subscription = source.subscribe(listener);
+            return () => subscription.unsubscribe();
+          },
+        })
+      : undefined,
     [source],
   );
-  const getSnapshot = useCallback(() => source?.current(), [source]);
+  const subscribe = useCallback(
+    (notify: () => void) => store?.subscribe(notify) ?? (() => undefined),
+    [store],
+  );
+  const getSnapshot = useCallback(() => store?.getSnapshot(), [store]);
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
@@ -112,15 +121,23 @@ export function useWidgetCapability<T extends RuntimeResource = ParameterProvide
 }
 
 export function useInvocationState<O>(invocation: Invocation<O> | undefined): InvocationState<O> | undefined {
-  const subscribe = useCallback(
-    (notify: () => void) => {
-      if (!invocation) return () => undefined;
-      const subscription = invocation.subscribe(() => notify());
-      return () => subscription.unsubscribe();
-    },
+  const store = useMemo(
+    () => invocation
+      ? createCachedExternalStore<InvocationState<O>>({
+          current: () => invocation.current(),
+          subscribe: (listener) => {
+            const subscription = invocation.subscribe(listener);
+            return () => subscription.unsubscribe();
+          },
+        })
+      : undefined,
     [invocation],
   );
-  const getSnapshot = useCallback(() => invocation?.current(), [invocation]);
+  const subscribe = useCallback(
+    (notify: () => void) => store?.subscribe(notify) ?? (() => undefined),
+    [store],
+  );
+  const getSnapshot = useCallback(() => store?.getSnapshot(), [store]);
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 

@@ -236,6 +236,19 @@ if (!exists(rendererRoot)) {
   }
 
   const rendererContext = read(`${rendererRoot}/src/context.tsx`);
+  const rendererExternalStore = `${rendererRoot}/src/external-store.ts`;
+  if (!exists(rendererExternalStore) || !rendererContext.includes("createCachedExternalStore")) {
+    violations.push("@ggcs/renderer-react must cache Source/Invocation snapshots before passing them to React external-store hooks");
+  } else {
+    const externalStoreSource = read(rendererExternalStore);
+    if (!externalStoreSource.includes("getSnapshot(): T") || !externalStoreSource.includes("Object.is(snapshot, next)")) {
+      violations.push("@ggcs/renderer-react cached external store must preserve snapshot identity until subscription delivery");
+    }
+    const externalStoreTest = `${rendererRoot}/test/external-store.test.ts`;
+    if (!exists(externalStoreTest) || !read(externalStoreTest).includes("referentially stable")) {
+      violations.push("@ggcs/renderer-react must retain regression evidence for unstable current() object identity");
+    }
+  }
   for (const hook of [
     "useWidgetInputObservation",
     "useWidgetCommand",
