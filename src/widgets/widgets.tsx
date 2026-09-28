@@ -4,7 +4,6 @@ import { HUDWidget } from "./HUDWidget";
 import { MapWidget } from "./MapWidget";
 import { SampleWidget } from "./SampleWidget";
 import { ActuatorWidget } from "./ActuatorWidget";
-import { ROSParametersWidget } from "./ROSParametersWidget";
 import { GaugeWidget } from "./GaugeWidget";
 import { StatusWidget } from "./StatusWidget";
 import { DiagnosticsWidget } from "./DiagnosticsWidget";
@@ -17,7 +16,6 @@ export const WIDGETS: Record<string, React.ComponentType<any>> = {
   gauge: GaugeWidget,
   sample: SampleWidget,
   actuator: ActuatorWidget,
-  rosParameters: ROSParametersWidget,
   status: StatusWidget,
   diagnostics: DiagnosticsWidget,
   service: ServiceWidget,

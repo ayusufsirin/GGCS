@@ -1,6 +1,7 @@
 import type {
   LastGoodObservation,
   Observation,
+  ParameterProvider,
   Procedure,
   RuntimeResource,
   Source,
@@ -12,6 +13,7 @@ import type {
 import {
   gaugeWidgetSpec,
   imageWidgetSpec,
+  parameterBrowserWidgetSpec,
   procedureActionWidgetSpec,
   statusWidgetSpec,
   type ImageFrame,
@@ -20,7 +22,7 @@ import {
 import { SENSOR_SUITE_RECORDING_REQUESTS } from "../application/recording-actions";
 import type { SensorSuiteCompatibilityAccess } from "../runtime/sensor-suite-application";
 
-type SemanticLegacyWidgetName = "gauge" | "status" | "service" | "image";
+type SemanticLegacyWidgetName = "gauge" | "status" | "service" | "image" | "rosParameters";
 
 type InputTransform = Readonly<{
   kind: "base64-image-frame";
@@ -37,6 +39,7 @@ interface SemanticWidgetCutoverDefinition {
     legacyPort: string;
     input: unknown;
   }>>>;
+  readonly capabilityAliases?: Readonly<Record<string, string>>;
 }
 
 function booleanStatus(
@@ -225,6 +228,15 @@ const DEFINITIONS: readonly SemanticWidgetCutoverDefinition[] = [
       },
     },
   },
+  {
+    legacyWidgetName: "rosParameters",
+    instance: {
+      id: "tabs.items.rosParameters",
+      spec: parameterBrowserWidgetSpec,
+      props: { title: "ROS Parameters", allowWrite: true },
+    },
+    capabilityAliases: { parameters: "parameters" },
+  },
 ];
 
 const DEFINITION_BY_ID = new Map(
@@ -264,6 +276,17 @@ function procedureResource<I, O>(
   if (binding?.kind !== "procedure") return undefined;
   const resource = compatibility.resourceForPort<RuntimeResource>(instanceId, legacyPort);
   return resource?.kind === "procedure" ? resource as Procedure<I, O> : undefined;
+}
+
+function parameterProviderResource(
+  compatibility: SensorSuiteCompatibilityAccess,
+  instanceId: string,
+  legacyCapability: string,
+): ParameterProvider | undefined {
+  const binding = compatibility.resolveCapability(instanceId, legacyCapability);
+  if (binding?.kind !== "parameterProvider") return undefined;
+  const resource = compatibility.resourceForCapability<RuntimeResource>(instanceId, legacyCapability);
+  return resource?.kind === "parameter_provider" ? resource as ParameterProvider : undefined;
 }
 
 function mapLastGood<T, U, Q>(
@@ -358,6 +381,7 @@ export function createSensorSuiteSemanticPresentationAccess(
 
       const inputCache = new Map<string, Source<unknown, unknown> | undefined>();
       const procedureCache = new Map<string, Procedure<void, unknown> | undefined>();
+      const capabilityCache = new Map<string, RuntimeResource | undefined>();
       const access: ResolvedWidgetAccess = {
         input<T, Q>(port: string) {
           if (inputCache.has(port)) {
@@ -397,7 +421,16 @@ export function createSensorSuiteSemanticPresentationAccess(
           procedureCache.set(port, resolved);
           return resolved as unknown as Procedure<I, O>;
         },
-        capability: () => undefined,
+        capability<T extends RuntimeResource>(port: string) {
+          if (capabilityCache.has(port)) {
+            return capabilityCache.get(port) as T | undefined;
+          }
+          const legacyCapability = definition.capabilityAliases?.[port];
+          if (!legacyCapability) return undefined;
+          const resolved = parameterProviderResource(compatibility, definition.instance.id, legacyCapability);
+          capabilityCache.set(port, resolved);
+          return resolved as T | undefined;
+        },
       };
       cache.set(instanceId, access);
       return access;

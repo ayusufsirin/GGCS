@@ -1,3 +1,5 @@
+export * from "./ParameterBrowserWidget.js";
+export * from "./parameter-baseline.js";
 export * from "./ImageWidget.js";
 export * from "./ProcedureActionWidget.js";
 export * from "./GaugeWidget.js";

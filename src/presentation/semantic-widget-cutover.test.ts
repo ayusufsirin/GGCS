@@ -1,5 +1,6 @@
 import type {
   Invocation,
+  ParameterProvider,
   Procedure,
   RuntimeResource,
   Source,
@@ -27,12 +28,13 @@ function legacyName(instanceId: string): string {
   if (instanceId.includes("gauges.grids.items")) return "gauge";
   if (instanceId.includes("actions.grids.items")) return "service";
   if (instanceId.includes("items.images")) return "image";
+  if (instanceId === "tabs.items.rosParameters") return "rosParameters";
   return "status";
 }
 
-describe("M05-S6 Sensor Suite semantic widget cutover", () => {
-  test("selects the explicit Gauge/Status/ProcedureAction/Image production instances only", () => {
-    expect(SENSOR_SUITE_SEMANTIC_WIDGET_INSTANCE_IDS).toHaveLength(15);
+describe("M05-S7 Sensor Suite semantic widget cutover", () => {
+  test("selects the explicit semantic production instances including Parameter Browser", () => {
+    expect(SENSOR_SUITE_SEMANTIC_WIDGET_INSTANCE_IDS).toHaveLength(16);
     expect(resolveSensorSuiteSemanticWidget(
       "tabs.items.home.grids.items.panel.tabs.items.gauges.grids.items.speed",
       "gauge",
@@ -49,6 +51,10 @@ describe("M05-S6 Sensor Suite semantic widget cutover", () => {
       "tabs.items.images.grids.items.zedRgb",
       "image",
     )?.spec.type).toBe("ggcs:image");
+    expect(resolveSensorSuiteSemanticWidget(
+      "tabs.items.rosParameters",
+      "rosParameters",
+    )?.spec.type).toBe("ggcs:parameter-browser");
     expect(resolveSensorSuiteSemanticWidget("tabs.items.home.grids.items.map", "map")).toBeUndefined();
     expect(resolveSensorSuiteSemanticWidget(
       "tabs.items.home.grids.items.gpsStatus",
@@ -120,6 +126,32 @@ describe("M05-S6 Sensor Suite semantic widget cutover", () => {
     trigger?.invoke();
     expect(invokedWith).toEqual(SENSOR_SUITE_RECORDING_REQUESTS.zedStart);
     expect((invokedWith as { svo_filename: string }).svo_filename).toMatch(/zed_\d{4}_\d{2}_\d{2}-\d{2}_\d{2}_\d{2}\.svo2$/);
+  });
+
+
+  test("adapts the active parameter browser through a generic ParameterProvider capability", () => {
+    const provider: ParameterProvider = {
+      kind: "parameter_provider",
+      id: "shadow.parameters" as never,
+      list: async () => [],
+      resolve: async () => { throw new Error("not needed"); },
+    };
+    const target = "tabs.items.rosParameters";
+    const compatibility: SensorSuiteCompatibilityAccess = {
+      runtimeState: () => "running",
+      resolvePort: () => undefined,
+      resolveCapability: (instanceId, capabilityName) => instanceId === target && capabilityName === "parameters"
+        ? { kind: "parameterProvider", resourceId: "shadow.parameters" }
+        : undefined,
+      resourceForPort: () => undefined,
+      resourceForCapability: <T extends RuntimeResource>(instanceId: string, capabilityName: string) =>
+        instanceId === target && capabilityName === "parameters" ? provider as unknown as T : undefined,
+    };
+
+    const capability = createSensorSuiteSemanticPresentationAccess(compatibility)
+      .widget(target)?.capability<ParameterProvider>("parameters");
+    expect(capability).toBe(provider);
+    expect(capability?.kind).toBe("parameter_provider");
   });
 
   test("adapts the existing camera base64 Source into renderer-neutral ImageFrame before the widget", () => {

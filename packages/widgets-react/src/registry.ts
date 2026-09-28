@@ -5,6 +5,7 @@ import {
 import { STANDARD_WIDGET_IDS } from "@ggcs/widgets";
 import { GaugeWidget } from "./GaugeWidget.js";
 import { ImageWidget } from "./ImageWidget.js";
+import { ParameterBrowserWidget } from "./ParameterBrowserWidget.js";
 import { ProcedureActionWidget } from "./ProcedureActionWidget.js";
 import { StatusWidget } from "./StatusWidget.js";
 
@@ -29,6 +30,11 @@ export const STANDARD_REACT_WIDGET_IMPLEMENTATIONS = Object.freeze([
     type: STANDARD_WIDGET_IDS.image,
     versions: [1],
     component: ImageWidget,
+  },
+  {
+    type: STANDARD_WIDGET_IDS.parameterBrowser,
+    versions: [1],
+    component: ParameterBrowserWidget,
   },
 ] as const satisfies readonly ReactWidgetImplementation[]);
 

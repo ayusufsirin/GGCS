@@ -3,6 +3,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
 import {
   RuntimeError,
+  type ParameterProvider,
+  type RuntimeResource,
   type Invocation,
   type Observation,
   type Procedure,
@@ -17,6 +19,7 @@ import {
   STANDARD_WIDGET_IDS,
   gaugeWidgetSpec,
   imageWidgetSpec,
+  parameterBrowserWidgetSpec,
   procedureActionWidgetSpec,
   statusWidgetSpec,
   type ImageFrame,
@@ -27,10 +30,14 @@ import {
 import {
   GaugeWidget,
   ImageWidget,
+  ParameterBrowserWidget,
   ProcedureActionWidget,
   StatusWidget,
   createStandardReactWidgetRegistry,
+  formatParameterValue,
   imageFrameSource,
+  parameterGroupForId,
+  parseParameterValue,
 } from "../src/index.js";
 
 function sourceOf<T>(observation: Observation<T>): Source<T> {
@@ -48,13 +55,14 @@ function markup<T>(options: {
   readonly props: Readonly<Record<string, unknown>>;
   readonly observation?: Observation<T>;
   readonly procedure?: Procedure<void, unknown>;
+  readonly capability?: RuntimeResource;
 }): string {
   const source = options.observation ? sourceOf(options.observation) : undefined;
   const access: ResolvedWidgetAccess = {
     input: <V,>() => source as unknown as Source<V> | undefined,
     command: () => undefined,
     procedure: <I, O>() => options.procedure as unknown as Procedure<I, O> | undefined,
-    capability: () => undefined,
+    capability: <R extends RuntimeResource>() => options.capability as R | undefined,
   };
   const instance: ResolvedWidgetInstance = {
     id: "test.widget" as never,
@@ -227,13 +235,49 @@ describe("semantic React widgets", () => {
     expect(imageFrameSource({ ...frame, encoding: "opaque-reference" })).toBeUndefined();
   });
 
-  test("registry publishes the S4/S6 proven semantic implementations", () => {
+
+  test("parameter browser consumes ParameterProvider capability without ROS/service assumptions", () => {
+    const provider: ParameterProvider = {
+      kind: "parameter_provider",
+      id: "test.parameters" as never,
+      list: async () => [],
+      resolve: async () => { throw new Error("not needed during server render"); },
+    };
+    const html = markup({
+      component: ParameterBrowserWidget,
+      spec: parameterBrowserWidgetSpec,
+      props: { title: "Parameters", allowWrite: true },
+      capability: provider,
+    });
+    expect(html).toContain('data-ggcs-widget="parameter-browser"');
+    expect(html).toContain('data-capability-state="available"');
+    expect(html).toContain("Load Parameters");
+    expect(html).not.toMatch(/rosapi|callService|ROSLIB/i);
+  });
+
+  test("parameter browser formats and parses semantic parameter values conservatively", () => {
+    expect(parameterGroupForId("/node:param")).toBe("/node");
+    expect(formatParameterValue({ enabled: true })).toBe('{"enabled":true}');
+    expect(parseParameterValue({
+      id: "speed" as never,
+      type: { id: "ggcs:type/number" as never, schema: { type: "number" } },
+      writable: true,
+    }, "12.5")).toBe(12.5);
+    expect(() => parseParameterValue({
+      id: "enabled" as never,
+      type: { id: "ggcs:type/boolean" as never, schema: { type: "boolean" } },
+      writable: true,
+    }, "yes")).toThrow("Expected true or false");
+  });
+
+  test("registry publishes the S4/S6/S7 proven semantic implementations", () => {
     const registry = createStandardReactWidgetRegistry();
     expect(registry.widgetTypes).toEqual([
       STANDARD_WIDGET_IDS.gauge,
       STANDARD_WIDGET_IDS.status,
       STANDARD_WIDGET_IDS.procedureAction,
       STANDARD_WIDGET_IDS.image,
+      STANDARD_WIDGET_IDS.parameterBrowser,
     ]);
   });
 });

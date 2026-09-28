@@ -73,9 +73,8 @@ if (index.includes("mode !== 'shadow'") || index.includes("parseSensorSuiteBacke
 
 const useAttr = read("src/middleware/hooks/use-attr.ts");
 const useService = read("src/middleware/hooks/use-service.ts");
-const useParameters = read("src/middleware/hooks/use-parameters.ts");
 const usePublisher = read("src/middleware/hooks/use-publisher.ts");
-for (const [name, content] of [["useAttr", useAttr], ["useService", useService], ["useParameters", useParameters], ["usePublisher", usePublisher]]) {
+for (const [name, content] of [["useAttr", useAttr], ["useService", useService], ["usePublisher", usePublisher]]) {
   for (const token of ["instance-store", "service-bus", "publisher-bus", "ROSLIB", "roslib"]) {
     if (content.includes(token)) violations.push(`${name} retains legacy transport/store dependency ${token}`);
   }
@@ -410,7 +409,7 @@ if (!bootstrapSource.includes("resolveSensorSuiteSemanticWidget") || !bootstrapS
 if (!read("packages/renderer-react/src/presentation.tsx").includes("export function ReactResolvedWidget")) {
   violations.push("M05-S5 generic renderer must expose the single resolved-widget primitive used by hybrid strangler integration");
 }
-for (const legacyWidget of ["MapWidget", "HUDWidget", "ROSParametersWidget", "ServiceWidget", "ImageWidget"]) {
+for (const legacyWidget of ["MapWidget", "HUDWidget", "ServiceWidget", "ImageWidget"]) {
   if (!read("src/widgets/widgets.tsx").includes(legacyWidget)) {
     violations.push(`M05-S5 must preserve non-migrated legacy widget ${legacyWidget} during incremental cutover`);
   }
@@ -464,9 +463,62 @@ for (const evidence of ["ggcs:procedure-action", "ggcs:image", "SENSOR_SUITE_REC
   }
 }
 
+
+// M05-S7 generic Parameter Browser extraction/cutover.
+for (const relative of [
+  "src/middleware/hooks/use-parameters.ts",
+  "src/middleware/hooks/use-parameters.test.tsx",
+  "src/widgets/ROSParametersWidget.tsx",
+  "src/widgets/ROSParametersWidget.test.tsx",
+]) {
+  if (exists(relative)) violations.push(`M05-S7 migrated parameter compatibility path still exists: ${relative}`);
+}
+const parameterBrowserReact = read(`${widgetsReactRoot}/src/ParameterBrowserWidget.tsx`);
+if (!parameterBrowserReact.includes('useWidgetCapability<ParameterProvider>("parameters")')) {
+  violations.push("M05-S7 Parameter Browser must consume the semantic ParameterProvider capability directly");
+}
+for (const token of ["useParameterBrowser", "/rosapi/", "callService", "ROSLIB", "roslib"]) {
+  if (parameterBrowserReact.includes(token)) {
+    violations.push(`M05-S7 reusable Parameter Browser contains protocol/migration detail ${token}`);
+  }
+}
+if (!widgetsReactRegistryS6.includes("STANDARD_WIDGET_IDS.parameterBrowser")) {
+  violations.push("@ggcs/widgets-react registry is missing S7 Parameter Browser implementation");
+}
+if (!semanticCutover.includes("parameterBrowserWidgetSpec") || !semanticCutover.includes("capabilityAliases")) {
+  violations.push("M05-S7 semantic cutover must bind the standard Parameter Browser capability");
+}
+if (!semanticCutover.includes('legacyWidgetName: "rosParameters"') || !semanticCutover.includes('capabilityAliases: { parameters: "parameters" }')) {
+  violations.push("M05-S7 active ROS Parameters instance must resolve through semantic Parameter Browser cutover");
+}
+const sensorSuiteConfig = read("src/config.ts");
+if (sensorSuiteConfig.includes("/rosapi/") || sensorSuiteConfig.includes("rosapi/Nodes") || sensorSuiteConfig.includes("rosapi/GetParam")) {
+  violations.push("M05-S7 presentation config must not retain raw rosapi parameter service definitions");
+}
+const legacyWidgetRegistry = read("src/widgets/widgets.tsx");
+if (legacyWidgetRegistry.includes("ROSParametersWidget") || legacyWidgetRegistry.includes("rosParameters:")) {
+  violations.push("M05-S7 legacy ROSParametersWidget registry path must be removed after semantic cutover");
+}
+const semanticFrameS7 = read("src/presentation/SemanticWidgetFrame.tsx");
+const baselineStore = read("src/presentation/parameter-baseline-store.ts");
+if (!semanticFrameS7.includes("ParameterBaselineProvider") || !baselineStore.includes('const LEGACY_BASELINE_KEY = "paramDefaults"')) {
+  violations.push("M05-S7 must preserve the existing Web baseline snapshot as explicit app/profile persistence");
+}
+if (baselineStore.includes("defaultValue")) {
+  // The explanatory comment may mention provider defaultValue; executable use is forbidden here.
+  const executable = baselineStore.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+  if (executable.includes("defaultValue")) violations.push("M05-S7 baseline persistence must not masquerade as ParameterDescriptor.defaultValue");
+}
+const semanticCutoverTestsS7 = read("src/presentation/semantic-widget-cutover.test.ts");
+for (const evidence of ["ggcs:parameter-browser", "ParameterProvider", 'capability<ParameterProvider>("parameters")']) {
+  if (!semanticCutoverTestsS7.includes(evidence)) {
+    violations.push(`M05-S7 cutover tests are missing evidence ${evidence}`);
+  }
+}
+
 if (violations.length) {
   for (const violation of violations) console.error(`M05 boundary violation: ${violation}`);
   process.exitCode = 1;
 } else {
-  console.log("M05-S1/S2/S3/S4/S5/S6 legacy removal + semantic widget + React renderer/widget + app cutover boundaries: PASS");
+  console.log("M05-S1/S2/S3/S4/S5/S6/S7 legacy removal + semantic widget + React renderer/widget + app cutover boundaries: PASS");
 }

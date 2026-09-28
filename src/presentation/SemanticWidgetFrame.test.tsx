@@ -1,7 +1,9 @@
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import type {
   Invocation,
+  Parameter,
+  ParameterProvider,
   Procedure,
   RuntimeResource,
   Source,
@@ -126,4 +128,75 @@ test("renders the migrated camera through renderer-neutral ImageFrame adaptation
     .toHaveAttribute("src", "data:image/png;base64,YWJj");
   expect(document.querySelector('[data-ggcs-widget="image"]'))
     .toHaveAttribute("data-observation-state", "fresh");
+});
+
+
+test("renders the migrated parameter browser through generic ParameterProvider capability access", async () => {
+  localStorage.clear();
+  const write = jest.fn(async () => undefined);
+  const descriptor = {
+    id: "/node:param",
+    type: { id: "ggcs:type/string", schema: { type: "string" }, title: "String" },
+    writable: true,
+  } as const;
+  const valueSource: Source<string> = {
+    kind: "source",
+    id: "/node:param.value",
+    current: () => ({ state: "fresh", value: "10", updatedAt: 1 }),
+    subscribe: () => ({ closed: false, unsubscribe() {} }),
+  };
+  const parameter: Parameter<string> = {
+    kind: "parameter",
+    id: "/node:param",
+    descriptor,
+    value: valueSource,
+    refresh: () => ({
+      id: "refresh",
+      current: () => ({ state: "succeeded", completedAt: 2, value: "10" }),
+      subscribe: () => ({ closed: false, unsubscribe() {} }),
+      result: async () => "10",
+    }),
+    write: (next) => ({
+      id: "write",
+      current: () => ({ state: "succeeded", completedAt: 2, value: undefined }),
+      subscribe: () => ({ closed: false, unsubscribe() {} }),
+      result: async () => { await write(next); },
+    }),
+  };
+  const provider: ParameterProvider = {
+    kind: "parameter_provider",
+    id: "shadow.parameters",
+    list: async () => [descriptor],
+    resolve: async <T,>() => parameter as unknown as Parameter<T>,
+  };
+  const instanceId = "tabs.items.rosParameters";
+  const instance = resolveSensorSuiteSemanticWidget(instanceId, "rosParameters");
+  expect(instance).toBeDefined();
+  const compatibility: SensorSuiteCompatibilityAccess = {
+    runtimeState: () => "running",
+    resolvePort: () => undefined,
+    resolveCapability: (candidateId, capabilityName) => candidateId === instanceId && capabilityName === "parameters"
+      ? { kind: "parameterProvider", resourceId: "shadow.parameters" }
+      : undefined,
+    resourceForPort: () => undefined,
+    resourceForCapability: <T extends RuntimeResource>(candidateId: string, capabilityName: string) =>
+      candidateId === instanceId && capabilityName === "parameters" ? provider as unknown as T : undefined,
+  };
+
+  render(
+    <RuntimeCompatibilityProvider access={compatibility}>
+      <SemanticWidgetFrame instance={instance!} />
+    </RuntimeCompatibilityProvider>,
+  );
+
+  await screen.findByRole("option", { name: "/node" });
+  fireEvent.click(screen.getByRole("button", { name: "Load Parameters" }));
+  await screen.findByText("/node:param");
+  expect(localStorage.getItem("paramDefaults")).toBe(JSON.stringify({ "/node:param": "10" }));
+
+  fireEvent.change(screen.getByRole("textbox", { name: "Edit /node:param" }), { target: { value: "20" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await act(async () => undefined);
+  expect(write).toHaveBeenCalledWith("20");
+  expect(localStorage.getItem("paramDefaults")).toBe(JSON.stringify({ "/node:param": "10" }));
 });
