@@ -133,7 +133,7 @@ test("renders the migrated camera through renderer-neutral ImageFrame adaptation
 
 test("renders the migrated parameter browser through generic ParameterProvider capability access", async () => {
   localStorage.clear();
-  const write = jest.fn(async () => undefined);
+  const write = jest.fn(async (_next: unknown) => undefined);
   const descriptor = {
     id: "/node:param",
     type: { id: "ggcs:type/string", schema: { type: "string" }, title: "String" },
